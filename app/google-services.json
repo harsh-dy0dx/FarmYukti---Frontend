@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "726264160685",
+    "project_id": "farmyukti",
+    "storage_bucket": "farmyukti.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:726264160685:android:aca1661a488268d2254124",
+        "android_client_info": {
+          "package_name": "com.example.farmyukti"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXAlD4nRoifq8HdtScZKoyJZcsSVKP0Ds"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
