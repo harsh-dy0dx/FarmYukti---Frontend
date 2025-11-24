@@ -1,6 +1,7 @@
-package com.example.farmyukti // Corrected package to match your project structure
+package com.example.farmyukti
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -28,29 +29,35 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Paid
+import androidx.compose.material.icons.filled.Password
+import androidx.compose.material.icons.filled.PestControl
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -67,11 +74,11 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,45 +92,49 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import androidx.navigation.NavHostController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.farmyukti.ui.theme.FarmyuktiTheme
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-// --- THEME ---
-// In a real app, this would be in its own Theme.kt file
 @Composable
 fun FarmyuktiTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
-            primary = Color(0xFF2E7D32), // Deep Green
+            primary = Color(0xFF2E7D32),
             onPrimary = Color.White,
-            secondary = Color(0xFF66BB6A), // Lighter, premium green accent
+            secondary = Color(0xFF66BB6A),
             onSecondary = Color.White,
-            background = Color.White, // Pure white background
-            onBackground = Color(0xFF1B1B1B), // Dark text
-            surface = Color.White, // Pure white surfaces (Cards, etc.)
-            onSurface = Color(0xFF1B1B1B), // Dark text on surfaces
-            primaryContainer = Color(0xFFE8F5E9), // Very light green for chips/icon backgrounds
-            onPrimaryContainer = Color(0xFF1B5E20) // Dark green text/icons on light green
+            background = Color.White,
+            onBackground = Color(0xFF1B1B1B),
+            surface = Color.White,
+            onSurface = Color(0xFF1B1B1B),
+            primaryContainer = Color(0xFFE8F5E9),
+            onPrimaryContainer = Color(0xFF1B5E20)
         ),
         typography = MaterialTheme.typography,
         shapes = MaterialTheme.shapes,
@@ -131,29 +142,24 @@ fun FarmyuktiTheme(content: @Composable () -> Unit) {
     )
 }
 
-// --- MAIN ACTIVITY ---
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             FarmyuktiTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    FarmYuktiApp()
-                }
+                FarmYuktiApp()
             }
         }
     }
 }
 
-// --- NAVIGATION ---
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
-    object RoleSelection : Screen("role_selection", "Select Role", Icons.Default.AccountCircle)
+    object Landing : Screen("landing", "Loading", Icons.Default.AccountCircle)
+    object Auth : Screen("auth", "Welcome", Icons.Default.AccountCircle)
     object Login : Screen("login", "Login", Icons.Default.AccountCircle)
+    object SignUp : Screen("signup", "Sign Up", Icons.Default.AccountCircle)
 
-    // Farmer Screens
+    object FarmerMain : Screen("farmer_main", "Farmer", Icons.Default.Home)
     object FarmerHome : Screen("farmer_home", "Home", Icons.Default.Home)
     object FarmerListings : Screen("farmer_listings", "Listings", Icons.AutoMirrored.Filled.ListAlt)
     object FarmerAdvisory : Screen("farmer_advisory", "Advisory", Icons.Default.Eco)
@@ -161,106 +167,225 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
         fun createRoute(listingId: String) = "farmer_negotiation/$listingId"
     }
 
-    // Buyer Screens
-    object BuyerHome : Screen("buyer_home", "Home", Icons.Default.Home)
+    object BuyerMain : Screen("buyer_main", "Buyer", Icons.Default.Storefront)
+    object BuyerHome : Screen("buyer_home", "Home", Icons.Default.Storefront)
     object BuyerMarketplace : Screen("buyer_marketplace", "Market", Icons.Default.ShoppingCart)
     object BuyerTracking : Screen("buyer_tracking", "Tracking", Icons.Default.LocalShipping)
-    object BuyerNegotiation : Screen("buyer_negotiation/{listingId}", "Negotiate", Icons.AutoMirrored.Filled.Chat) {
+    object BuyerNegotiation : Screen("buyer_negotiation/{listingId}", "NegotiATE", Icons.AutoMirrored.Filled.Chat) {
         fun createRoute(listingId: String) = "buyer_negotiation/$listingId"
     }
 }
 
-// --- MOCK DATA MODELS ---
-// These models are based on the synopsis
 data class ProduceListing(
     val id: String,
     val farmerName: String,
     val produceName: String,
     val quantityKg: Int,
     val basePricePerKg: Double,
-    val aiQualityGrade: String, // e.g., "Grade A", "Grade B"
+    val aiQualityGrade: String,
     val location: String,
     val imageUrl: String = "https://placehold.co/600x400/2E7D32/FFFFFF?text=Produce"
 )
-
-data class Advisory(
-    val id: String,
-    val title: String,
-    val type: AdvisoryType,
-    val summary: String,
-    val date: String
-)
-
+data class Advisory(val id: String, val title: String, val type: AdvisoryType, val summary: String, val date: String)
 enum class AdvisoryType { CROP, FERTILIZER, PEST, WEATHER }
+data class NegotiationMessage(val id: String, val sender: String, val text: String, val timestamp: Long)
+data class UserProfile(val uid: String = "", val role: String = "", val farmerId: String = "")
 
-data class NegotiationMessage(
-    val id: String,
-    val sender: String, // "Farmer" or "Buyer"
-    val text: String,
-    val timestamp: Long
-)
-
-// --- VIEWMODEL ---
-// A simple ViewModel to manage the app's state, like user role.
-// In a real app, you'd have more complex ViewModels with Hilt/Dagger.
 class AppViewModel : ViewModel() {
-    private val _userRole = MutableStateFlow<UserRole?>(null)
-    val userRole = _userRole.asStateFlow()
+    private val auth: FirebaseAuth = Firebase.auth
+    private val db: FirebaseFirestore = Firebase.firestore
 
-    fun selectRole(role: UserRole) {
-        _userRole.value = role
+    private val _userRole = MutableStateFlow<UserRole?>(null)
+    val userRole: StateFlow<UserRole?> = _userRole.asStateFlow()
+
+    private val _authUiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
+    val authUiState: StateFlow<AuthUiState> = _authUiState.asStateFlow()
+
+    init {
+        checkCurrentUser()
     }
+
+    private fun checkCurrentUser() {
+        viewModelScope.launch {
+            _authUiState.value = AuthUiState.Loading
+            val user = auth.currentUser
+            if (user != null) {
+                fetchUserRole(user.uid)
+            } else {
+                _authUiState.value = AuthUiState.SignedOut
+                _userRole.value = null
+            }
+        }
+    }
+
+    fun fetchUserRole(uid: String) {
+        viewModelScope.launch {
+            try {
+                val document = db.collection("users").document(uid).get().await()
+                val roleString = document.getString("role")
+                _userRole.value = when (roleString) {
+                    "FARMER" -> UserRole.FARMER
+                    "BUYER" -> UserRole.BUYER
+                    else -> null
+                }
+                _authUiState.value = AuthUiState.SignedIn
+            } catch (e: Exception) {
+                _authUiState.value = AuthUiState.Error("Failed to fetch user role: ${e.message}")
+                _userRole.value = null
+            }
+        }
+    }
+
+    fun signUp(email: String, password: String, role: UserRole, farmerId: String) {
+        viewModelScope.launch {
+            _authUiState.value = AuthUiState.Loading
+            try {
+                val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+                val user = authResult.user
+                if (user != null) {
+                    val userProfile = mapOf(
+                        "uid" to user.uid,
+                        "email" to email,
+                        "role" to role.name,
+                        "farmerId" to if (role == UserRole.FARMER) farmerId else ""
+                    )
+                    db.collection("users").document(user.uid).set(userProfile).await()
+
+                    // Sign the new user out to force them to log in
+                    auth.signOut()
+                    _authUiState.value = AuthUiState.SignUpSuccess
+                } else {
+                    _authUiState.value = AuthUiState.Error("Sign up failed: User is null")
+                }
+            } catch (e: Exception) {
+                _authUiState.value = AuthUiState.Error("Sign up failed: ${e.message}")
+            }
+        }
+    }
+
+    fun login(email: String, password: String) {
+        viewModelScope.launch {
+            _authUiState.value = AuthUiState.Loading
+            try {
+                val authResult = auth.signInWithEmailAndPassword(email, password).await()
+                val user = authResult.user
+                if (user != null) {
+                    fetchUserRole(user.uid)
+                } else {
+                    _authUiState.value = AuthUiState.Error("Login failed: User is null")
+                }
+            } catch (e: Exception) {
+                _authUiState.value = AuthUiState.Error("Login failed: ${e.message}")
+            }
+        }
+    }
+
+    fun logout() {
+        auth.signOut()
+        _userRole.value = null
+        _authUiState.value = AuthUiState.SignedOut
+    }
+
+    fun resetAuthState() {
+        if (_authUiState.value is AuthUiState.Error || _authUiState.value is AuthUiState.SignUpSuccess) {
+            // Check if user is logged out, otherwise set to idle
+            if (auth.currentUser == null) {
+                _authUiState.value = AuthUiState.SignedOut
+            } else {
+                _authUiState.value = AuthUiState.Idle
+            }
+        }
+    }
+}
+
+sealed class AuthUiState {
+    object Idle : AuthUiState()
+    object Loading : AuthUiState()
+    object SignedIn : AuthUiState()
+    object SignedOut : AuthUiState()
+    object SignUpSuccess : AuthUiState() // New state for sign-up success
+    data class Error(val message: String?) : AuthUiState()
 }
 
 enum class UserRole { FARMER, BUYER }
 
-// --- MAIN APP COMPOSABLE (Entry Point) ---
 @Composable
 fun FarmYuktiApp(
-    navController: NavHostController = rememberNavController(),
     appViewModel: AppViewModel = viewModel()
 ) {
+    val navController = rememberNavController()
+    val authUiState by appViewModel.authUiState.collectAsState()
     val userRole by appViewModel.userRole.collectAsState()
-    val startDestination = Screen.RoleSelection.route
 
-    NavHost(navController = navController, startDestination = startDestination) {
-        composable(Screen.RoleSelection.route) {
-            RoleSelectionScreen(navController = navController, onRoleSelected = { role ->
-                appViewModel.selectRole(role)
-                navController.navigate(Screen.Login.route) {
-                    popUpTo(Screen.RoleSelection.route) { inclusive = true }
+    val context = LocalContext.current
+    LaunchedEffect(authUiState) {
+        if (authUiState is AuthUiState.Error) {
+            val message = (authUiState as AuthUiState.Error).message
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            appViewModel.resetAuthState() // Use new reset function
+        }
+    }
+
+    NavHost(navController = navController, startDestination = Screen.Landing.route) {
+
+        composable(Screen.Landing.route) {
+            LandingScreen(authUiState, userRole) { destination ->
+                navController.navigate(destination) {
+                    popUpTo(Screen.Landing.route) { inclusive = true }
+                    launchSingleTop = true
                 }
-            })
+            }
+        }
+
+        composable(Screen.Auth.route) {
+            AuthScreen(
+                onLoginClicked = { navController.navigate(Screen.Login.route) },
+                onSignUpClicked = { navController.navigate(Screen.SignUp.route) }
+            )
         }
 
         composable(Screen.Login.route) {
-            LoginScreen(navController = navController, role = userRole ?: UserRole.FARMER)
+            LoginScreen(
+                navController = navController,
+                appViewModel = appViewModel
+            )
         }
 
-        // --- Farmer Navigation Graph ---
-        composable(Screen.FarmerHome.route) {
-            FarmerMainScreen(navController = navController)
+        composable(Screen.SignUp.route) {
+            SignUpScreen(
+                navController = navController,
+                appViewModel = appViewModel
+            )
         }
-        composable(Screen.FarmerListings.route) {
-            FarmerMainScreen(navController = navController)
-        }
-        composable(Screen.FarmerAdvisory.route) {
-            FarmerMainScreen(navController = navController)
+
+        composable(Screen.FarmerMain.route) {
+            FarmerMainScreen(
+                navController = navController,
+                onLogout = {
+                    appViewModel.logout()
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(Screen.FarmerMain.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
         }
         composable(Screen.FarmerNegotiation.route) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId") ?: "default"
             NegotiationScreen(navController = navController, listingId = listingId, userRole = UserRole.FARMER)
         }
 
-        // --- Buyer Navigation Graph ---
-        composable(Screen.BuyerHome.route) {
-            BuyerMainScreen(navController = navController)
-        }
-        composable(Screen.BuyerMarketplace.route) {
-            BuyerMainScreen(navController = navController)
-        }
-        composable(Screen.BuyerTracking.route) {
-            BuyerMainScreen(navController = navController)
+        composable(Screen.BuyerMain.route) {
+            BuyerMainScreen(
+                navController = navController,
+                onLogout = {
+                    appViewModel.logout()
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(Screen.BuyerMain.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
         }
         composable(Screen.BuyerNegotiation.route) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId") ?: "default"
@@ -269,135 +394,331 @@ fun FarmYuktiApp(
     }
 }
 
-// --- ROLE SELECTION SCREEN ---
 @Composable
-fun RoleSelectionScreen(
-    navController: NavController,
-    onRoleSelected: (UserRole) -> Unit
+fun LandingScreen(
+    authUiState: AuthUiState,
+    userRole: UserRole?,
+    onNavigate: (String) -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
     ) {
-        Text("FarmYukti", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-        Text("Welcome to the Future of Farming", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 48.dp))
+        CircularProgressIndicator()
 
-        Text("Please select your role:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 24.dp))
-
-        Button(
-            onClick = { onRoleSelected(UserRole.FARMER) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .padding(vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Default.Eco, contentDescription = "Farmer", modifier = Modifier.padding(end = 8.dp))
-            Text("I am a Farmer", fontSize = 18.sp)
-        }
-
-        Button(
-            onClick = { onRoleSelected(UserRole.BUYER) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .padding(vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Default.ShoppingCart, contentDescription = "Buyer", modifier = Modifier.padding(end = 8.dp))
-            Text("I am a Buyer", fontSize = 18.sp)
+        LaunchedEffect(authUiState, userRole) {
+            when (authUiState) {
+                is AuthUiState.SignedIn -> {
+                    when (userRole) {
+                        UserRole.FARMER -> onNavigate(Screen.FarmerMain.route)
+                        UserRole.BUYER -> onNavigate(Screen.BuyerMain.route)
+                        null -> {
+                        }
+                    }
+                }
+                is AuthUiState.SignedOut -> {
+                    onNavigate(Screen.Auth.route)
+                }
+                is AuthUiState.Error -> {
+                    onNavigate(Screen.Auth.route)
+                }
+                else -> {
+                }
+            }
         }
     }
 }
 
-// --- LOGIN SCREEN ---
 @Composable
-fun LoginScreen(
-    navController: NavController,
-    role: UserRole
+fun AuthScreen(
+    onLoginClicked: () -> Unit,
+    onSignUpClicked: () -> Unit
 ) {
-    var farmerId by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    val isFarmer = role == UserRole.FARMER
-
-    // Mock authentication
-    val onLoginClicked = {
-        // In a real app, you'd call Firebase Auth here.
-        // For now, we just navigate to the correct home screen.
-        if (isFarmer) {
-            navController.navigate(Screen.FarmerHome.route) {
-                popUpTo(Screen.Login.route) { inclusive = true }
-            }
-        } else {
-            navController.navigate(Screen.BuyerHome.route) {
-                popUpTo(Screen.Login.route) { inclusive = true }
-            }
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Login as ${if (isFarmer) "Farmer" else "Buyer"}", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(bottom = 24.dp))
-
-        // As per synopsis, farmer login is via 11-digit Farmer ID from AgriStack
-        OutlinedTextField(
-            value = farmerId,
-            onValueChange = { farmerId = it },
-            label = { Text(if (isFarmer) "Farmer ID (AgriStack)" else "Buyer ID") },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true
+        Icon(
+            Icons.Filled.Eco,
+            contentDescription = "FarmYukti Logo",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(100.dp)
         )
-
         Spacer(Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password / OTP") },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardType.Password.let { KeyboardOptions(keyboardType = it) },
-            singleLine = true
-        )
-
-        Spacer(Modifier.height(24.dp))
+        Text("Welcome to FarmYukti", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("Direct Market Access for Farmers", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+        Spacer(Modifier.height(48.dp))
 
         Button(
             onClick = onLoginClicked,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(60.dp),
+            shape = RoundedCornerShape(12.dp)
         ) {
-            Text("Login")
+            Text("Login", fontSize = 18.sp)
         }
 
         Spacer(Modifier.height(16.dp))
 
-        // As per synopsis, VIO (Voice Input/Output) is critical for accessibility
         OutlinedButton(
-            onClick = { /* TODO: Implement Voice Login */ },
+            onClick = onSignUpClicked,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(60.dp),
+            shape = RoundedCornerShape(12.dp)
         ) {
-            Icon(Icons.Default.Mic, contentDescription = "Voice Login", modifier = Modifier.padding(end = 8.dp))
-            Text("Login with Voice")
+            Text("Sign Up", fontSize = 18.sp)
         }
     }
 }
 
-// --- FARMER: MAIN SCREEN (with Bottom Nav) ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FarmerMainScreen(navController: NavHostController) {
+fun SignUpScreen(
+    navController: NavController,
+    appViewModel: AppViewModel
+) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var farmerId by rememberSaveable { mutableStateOf("") }
+    var selectedRole by remember { mutableStateOf(UserRole.FARMER) }
+
+    val authUiState by appViewModel.authUiState.collectAsState()
+    val isLoading = authUiState is AuthUiState.Loading
+    val context = LocalContext.current
+
+    LaunchedEffect(authUiState) {
+        if (authUiState is AuthUiState.SignUpSuccess) {
+            Toast.makeText(context, "Sign up successful! Please log in.", Toast.LENGTH_SHORT).show()
+            appViewModel.resetAuthState() // Reset the state
+            navController.navigate(Screen.Login.route) {
+                popUpTo(Screen.Auth.route) { inclusive = true } // Navigate to Login, clear Auth stack
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Create Account") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(16.dp))
+
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    onClick = { selectedRole = UserRole.FARMER },
+                    selected = selectedRole == UserRole.FARMER
+                ) {
+                    Text("I am a Farmer")
+                }
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    onClick = { selectedRole = UserRole.BUYER },
+                    selected = selectedRole == UserRole.BUYER
+                ) {
+                    Text("I am a Buyer")
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email Address") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email") }
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password (min. 6 characters)") },
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Password, contentDescription = "Password") }
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            if (selectedRole == UserRole.FARMER) {
+                OutlinedTextField(
+                    value = farmerId,
+                    onValueChange = { farmerId = it },
+                    label = { Text("11-Digit Farmer ID (from AgriStack)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.AccountCircle, contentDescription = "Farmer ID") }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            Button(
+                onClick = {
+                    appViewModel.signUp(email, password, selectedRole, farmerId)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                enabled = !isLoading
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Sign Up")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LoginScreen(
+    navController: NavController,
+    appViewModel: AppViewModel
+) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+
+    val authUiState by appViewModel.authUiState.collectAsState()
+    val isLoading = authUiState is AuthUiState.Loading
+    val context = LocalContext.current
+
+    LaunchedEffect(authUiState) {
+        if (authUiState is AuthUiState.SignedIn) {
+            Toast.makeText(context, "Login successful!", Toast.LENGTH_SHORT).show()
+            navController.navigate(Screen.Landing.route) {
+                popUpTo(Screen.Auth.route) { inclusive = true }
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Login") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                Icons.Filled.Eco,
+                contentDescription = "FarmYukti Logo",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(80.dp)
+            )
+            Spacer(Modifier.height(32.dp))
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email Address") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email") }
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Password, contentDescription = "Password") }
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    appViewModel.login(email, password)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                enabled = !isLoading
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Login")
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = { /* TODO: VIO Login */ },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                enabled = !isLoading
+            ) {
+                Icon(Icons.Default.Mic, contentDescription = "Voice Login", modifier = Modifier.padding(end = 8.dp))
+                Text("Login with Voice")
+            }
+        }
+    }
+}
+
+@Composable
+fun FarmerMainScreen(
+    navController: NavController,
+    onLogout: () -> Unit
+) {
     val bottomNavController = rememberNavController()
     val screens = listOf(
         Screen.FarmerHome,
@@ -413,13 +734,13 @@ fun FarmerMainScreen(navController: NavHostController) {
         Box(modifier = Modifier.padding(padding)) {
             NavHost(navController = bottomNavController, startDestination = Screen.FarmerHome.route) {
                 composable(Screen.FarmerHome.route) {
-                    FarmerHomeScreen(navController = navController) // Pass main controller
+                    FarmerHomeScreen(navController = navController, onLogout = onLogout)
                 }
                 composable(Screen.FarmerListings.route) {
-                    FarmerListingsScreen(navController = navController) // Pass main controller
+                    FarmerListingsScreen(navController = navController)
                 }
                 composable(Screen.FarmerAdvisory.route) {
-                    FarmerAdvisoryScreen(navController = navController) // Pass main controller
+                    FarmerAdvisoryScreen(navController = navController)
                 }
             }
         }
@@ -427,7 +748,7 @@ fun FarmerMainScreen(navController: NavHostController) {
 }
 
 @Composable
-fun FarmerBottomNavigationBar(navController: NavHostController, items: List<Screen>) {
+fun FarmerBottomNavigationBar(navController: NavController, items: List<Screen>) {
     NavigationBar {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
@@ -439,8 +760,11 @@ fun FarmerBottomNavigationBar(navController: NavHostController, items: List<Scre
                 selected = currentRoute == screen.route,
                 onClick = {
                     navController.navigate(screen.route) {
-                        popUpTo(navController.graph.startDestinationId)
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
                         launchSingleTop = true
+                        restoreState = true
                     }
                 }
             )
@@ -448,37 +772,38 @@ fun FarmerBottomNavigationBar(navController: NavHostController, items: List<Scre
     }
 }
 
-// --- FARMER: HOME SCREEN ---
 @Composable
-fun FarmerHomeScreen(navController: NavController) {
+fun FarmerHomeScreen(
+    navController: NavController,
+    onLogout: () -> Unit
+) {
     val mockAdvisories = listOf(
         Advisory("w1", "Heavy Rain Warning", AdvisoryType.WEATHER, "Expect heavy rainfall in your region in the next 48 hours. Secure any open storage.", "Nov 1, 2025"),
-        Advisory("p1", "Pest Alert: Aphids", AdvisoryType.PEST, "Aphid populations detected near your plot. Inspect underside of leaves.", "Oct 31, 2025")
+        Advisory("p1", "Pest Alert: Pod Borer", AdvisoryType.PEST, "Pod Borer activity detected in your area. Immediate action required.", "Nov 1, 2025")
     )
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF5F5F5)),
+        contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text("Welcome, Farmer!", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(8.dp))
-            // Synopsis mentions personalized early warning system
-            Text("Personalized Early Warnings", style = MaterialTheme.typography.titleLarge)
+            Text("Personalized Early Warnings", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp))
         }
 
         items(mockAdvisories) { advisory ->
-            WarningCard(advisory)
+            WarningAdvisoryCard(advisory = advisory, modifier = Modifier.padding(horizontal = 16.dp))
         }
 
         item {
-            Text("Quick Actions", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp))
+            Text("Quick Actions", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp, start = 16.dp))
         }
 
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 QuickActionCard(title = "New Listing", icon = Icons.Filled.AddShoppingCart, onClick = { /* TODO */ })
@@ -487,7 +812,7 @@ fun FarmerHomeScreen(navController: NavController) {
             }
             Spacer(Modifier.height(16.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 QuickActionCard(title = "Market Prices", icon = Icons.Filled.TrendingUp, onClick = { /* TODO */ })
@@ -495,14 +820,31 @@ fun FarmerHomeScreen(navController: NavController) {
                 QuickActionCard(title = "My Profile", icon = Icons.Filled.AccountCircle, onClick = { /* TODO */ })
             }
         }
+
+        item {
+            Spacer(Modifier.height(32.dp))
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log Out", modifier = Modifier.padding(end = 8.dp))
+                Text("Log Out")
+            }
+            Spacer(Modifier.height(16.dp))
+        }
     }
 }
 
 @Composable
-fun WarningCard(advisory: Advisory) {
+fun WarningAdvisoryCard(advisory: Advisory, modifier: Modifier = Modifier) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = if (advisory.type == AdvisoryType.WEATHER) Color(0xFFFFF3E0) else Color(0xFFFBE9E7)),
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
@@ -536,16 +878,16 @@ fun QuickActionCard(title: String, icon: ImageVector, onClick: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                .size(64.dp) // Larger, premium feel
-                .clip(RoundedCornerShape(16.dp)) // Softer, premium corners
-                .background(MaterialTheme.colorScheme.primaryContainer), // Light green background
+                .size(64.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 icon,
                 contentDescription = title,
                 modifier = Modifier.size(32.dp),
-                tint = MaterialTheme.colorScheme.primary // Main green icon
+                tint = MaterialTheme.colorScheme.primary
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -553,17 +895,26 @@ fun QuickActionCard(title: String, icon: ImageVector, onClick: () -> Unit) {
     }
 }
 
-// --- FARMER: LISTINGS SCREEN ---
-@OptIn(ExperimentalMaterial3Api::class) // Corrected OptIn
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FarmerListingsScreen(navController: NavController) {
     val mockListings = listOf(
         ProduceListing("l1", "My Farm", "Sona Masoori Rice", 500, 45.0, "Grade A", "Guntur, AP"),
-        ProduceListing("l2", "My Farm", "Red Chillies", 200, 220.0, "Grade A", "Guntur, AP")
+        ProduceListing("l2", "My Farm", "Red Chillies", 200, 220.0, "Grade A", "Guntur, AP"),
+        ProduceListing("l3", "My Farm", "Turmeric", 150, 180.0, "Grade B", "Erode, TN")
     )
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("My Produce Listings") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)) }
+        topBar = { TopAppBar(title = { Text("My Produce Listings") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)) },
+        floatingActionButton = {
+            Button(
+                onClick = { /* TODO: Add new listing */ },
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.padding(end = 8.dp))
+                Text("New Listing")
+            }
+        }
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -572,11 +923,6 @@ fun FarmerListingsScreen(navController: NavController) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item {
-                Button(onClick = { /* TODO: Add new listing */ }, modifier = Modifier.fillMaxWidth()) {
-                    Text("+ Add New Listing")
-                }
-            }
             items(mockListings) { listing ->
                 ProduceListItem(
                     listing = listing,
@@ -590,17 +936,21 @@ fun FarmerListingsScreen(navController: NavController) {
 }
 
 @Composable
-fun ProduceListItem(listing: ProduceListing, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ProduceListItem(
+    listing: ProduceListing,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Card(
-        modifier = modifier // Use the modifier passed in
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(modifier = Modifier.padding(12.dp)) {
-            // Placeholder Image
             Image(
-                painter = painterResource(id = android.R.drawable.ic_menu_gallery), // Replace with Coil
+                painter = painterResource(id = android.R.drawable.ic_menu_gallery),
                 contentDescription = listing.produceName,
                 modifier = Modifier
                     .size(80.dp)
@@ -613,12 +963,11 @@ fun ProduceListItem(listing: ProduceListing, onClick: () -> Unit, modifier: Modi
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(listing.produceName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Base Price: ₹${listing.basePricePerKg}/kg", style = MaterialTheme.typography.bodyMedium)
-                Text("Quantity: ${listing.quantityKg} kg", style = MaterialTheme.typography.bodyMedium)
+                Text("Qty: ${listing.quantityKg} kg", style = MaterialTheme.typography.bodyMedium)
+                Text("Price: ₹${listing.basePricePerKg}/kg", style = MaterialTheme.typography.bodyMedium)
                 Text("Location: ${listing.location}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
 
-            // AI Quality Grade from synopsis
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
@@ -632,25 +981,23 @@ fun ProduceListItem(listing: ProduceListing, onClick: () -> Unit, modifier: Modi
     }
 }
 
-// --- FARMER: ADVISORY SCREEN ---
-@OptIn(ExperimentalMaterial3Api::class) // Corrected OptIn
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FarmerAdvisoryScreen(navController: NavController) {
     val advisoryTypes = listOf("All", "Crop", "Fertilizer", "Pest", "Weather")
     var selectedType by remember { mutableStateOf(advisoryTypes[0]) }
 
-    val allAdvisories = listOf(
-        Advisory("c1", "Crop Rotation Advice", AdvisoryType.CROP, "Consider rotating with legumes to improve soil nitrogen.", "Oct 30, 2025"),
-        Advisory("f1", "Fertilizer Timing", AdvisoryType.FERTILIZER, "Apply next round of NPK fertilizer 30 days after sowing.", "Oct 28, 2025"),
-        Advisory("p1", "Pest Alert: Aphids", AdvisoryType.PEST, "Aphid populations detected near your plot. Inspect underside of leaves.", "Oct 31, 2025"),
+    val mockAdvisories = listOf(
+        Advisory("c1", "Crop Rotation Plan", AdvisoryType.CROP, "Consider rotating with legumes to improve soil nitrogen.", "Nov 2, 2025"),
+        Advisory("f1", "Fertilizer Dose - NPK", AdvisoryType.FERTILIZER, "Recommended NPK ratio for your soil test is 12:32:16.", "Nov 2, 2025"),
+        Advisory("p1", "Pest Alert: Pod Borer", AdvisoryType.PEST, "Pod Borer activity detected in your area. Immediate action required.", "Nov 1, 2025"),
         Advisory("w1", "Heavy Rain Warning", AdvisoryType.WEATHER, "Expect heavy rainfall in your region in the next 48 hours.", "Nov 1, 2025")
     )
 
-    val filteredAdvisories = allAdvisories.filter {
+    val filteredAdvisories = mockAdvisories.filter {
         selectedType == "All" || it.type.name.equals(selectedType, ignoreCase = true)
     }
 
-    // Synopsis requires AI Pest/Disease Management via image upload
     var showPestSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
@@ -667,10 +1014,12 @@ fun FarmerAdvisoryScreen(navController: NavController) {
             item {
                 Button(
                     onClick = { showPestSheet = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Icon(Icons.Default.GpsFixed, contentDescription = "Pest Diagnosis", modifier = Modifier.padding(end = 8.dp))
+                    Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", modifier = Modifier.padding(end = 8.dp))
                     Text("Diagnose Pest/Disease (AI Scan)")
                 }
             }
@@ -699,7 +1048,7 @@ fun FarmerAdvisoryScreen(navController: NavController) {
                 onDismissRequest = { showPestSheet = false },
                 sheetState = sheetState
             ) {
-                PestDiagnosisSheetContent { showPestSheet = false }
+                PestDiagnosisSheetContent(onDismiss = { showPestSheet = false })
             }
         }
     }
@@ -709,15 +1058,15 @@ fun FarmerAdvisoryScreen(navController: NavController) {
 fun AdvisoryCard(advisory: Advisory) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     when (advisory.type) {
                         AdvisoryType.CROP -> Icons.Default.Eco
-                        AdvisoryType.FERTILIZER -> Icons.Default.Star // Placeholder
-                        AdvisoryType.PEST -> Icons.Default.Warning
+                        AdvisoryType.FERTILIZER -> Icons.Default.WaterDrop
+                        AdvisoryType.PEST -> Icons.Default.PestControl
                         AdvisoryType.WEATHER -> Icons.Default.Warning
                     },
                     contentDescription = advisory.type.name,
@@ -727,8 +1076,7 @@ fun AdvisoryCard(advisory: Advisory) {
                 Spacer(Modifier.width(8.dp))
                 Text(
                     advisory.type.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -742,7 +1090,6 @@ fun AdvisoryCard(advisory: Advisory) {
 
 @Composable
 fun PestDiagnosisSheetContent(onDismiss: () -> Unit) {
-    // This sheet implements the "AI-Powered Pest and Disease Management (PDM)"
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -775,10 +1122,11 @@ fun PestDiagnosisSheetContent(onDismiss: () -> Unit) {
     }
 }
 
-
-// --- BUYER: MAIN SCREEN (with Bottom Nav) ---
 @Composable
-fun BuyerMainScreen(navController: NavHostController) {
+fun BuyerMainScreen(
+    navController: NavController,
+    onLogout: () -> Unit
+) {
     val bottomNavController = rememberNavController()
     val screens = listOf(
         Screen.BuyerHome,
@@ -794,13 +1142,13 @@ fun BuyerMainScreen(navController: NavHostController) {
         Box(modifier = Modifier.padding(padding)) {
             NavHost(navController = bottomNavController, startDestination = Screen.BuyerHome.route) {
                 composable(Screen.BuyerHome.route) {
-                    BuyerHomeScreen(navController = navController) // Pass main controller
+                    BuyerHomeScreen(navController = navController, onLogout = onLogout)
                 }
                 composable(Screen.BuyerMarketplace.route) {
-                    BuyerMarketplaceScreen(navController = navController) // Pass main controller
+                    BuyerMarketplaceScreen(navController = navController)
                 }
                 composable(Screen.BuyerTracking.route) {
-                    BuyerTrackingScreen(navController = navController) // Pass main controller
+                    BuyerTrackingScreen(navController = navController)
                 }
             }
         }
@@ -808,7 +1156,7 @@ fun BuyerMainScreen(navController: NavHostController) {
 }
 
 @Composable
-fun BuyerBottomNavigationBar(navController: NavHostController, items: List<Screen>) {
+fun BuyerBottomNavigationBar(navController: NavController, items: List<Screen>) {
     NavigationBar {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
@@ -820,8 +1168,11 @@ fun BuyerBottomNavigationBar(navController: NavHostController, items: List<Scree
                 selected = currentRoute == screen.route,
                 onClick = {
                     navController.navigate(screen.route) {
-                        popUpTo(navController.graph.startDestinationId)
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
                         launchSingleTop = true
+                        restoreState = true
                     }
                 }
             )
@@ -829,10 +1180,11 @@ fun BuyerBottomNavigationBar(navController: NavHostController, items: List<Scree
     }
 }
 
-// --- BUYER: HOME SCREEN ---
 @Composable
-fun BuyerHomeScreen(navController: NavController) {
-    // Mock data for Buyer Dashboard
+fun BuyerHomeScreen(
+    navController: NavController,
+    onLogout: () -> Unit
+) {
     val featuredCategories = listOf("Rice", "Spices", "Pulses", "Fruits", "Vegetables")
     val recentOrders = listOf(
         ProduceListing("l1", "Farmer Ramesh", "Sona Masoori Rice", 500, 45.0, "Grade A", "Guntur, AP"),
@@ -840,32 +1192,34 @@ fun BuyerHomeScreen(navController: NavController) {
     )
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF5F5F5)),
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Text(
-                "Welcome, Buyer!",
+                "Welcome, Buyer",
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             Spacer(Modifier.height(8.dp))
-            // Synopsis: Procurement and Sourcing Dashboard
             OutlinedTextField(
                 value = "",
                 onValueChange = {},
-                label = { Text("Search produce (e.g., 'Sona Masoori')") },
+                placeholder = { Text("Search all produce...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(16.dp)
             )
         }
 
         item {
             Text(
-                "Featured Categories",
+                "Shop by Category",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
@@ -886,7 +1240,7 @@ fun BuyerHomeScreen(navController: NavController) {
             Text(
                 "My Recent Procurements",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp) // <-- FIXED! Changed 'top' to 'vertical' as you suggested.
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
             )
         }
 
@@ -898,6 +1252,23 @@ fun BuyerHomeScreen(navController: NavController) {
                 },
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
+        }
+
+        item {
+            Spacer(Modifier.height(32.dp))
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log Out", modifier = Modifier.padding(end = 8.dp))
+                Text("Log Out")
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -913,19 +1284,18 @@ fun CategoryChip(category: String) {
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            color = MaterialTheme.colorScheme.onPrimaryContainer // Will be dark green
+            color = MaterialTheme.colorScheme.onPrimaryContainer
         )
     }
 }
 
-// --- BUYER: MARKETPLACE SCREEN ---
-@OptIn(ExperimentalMaterial3Api::class) // Corrected OptIn
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuyerMarketplaceScreen(navController: NavController) {
     val mockListings = listOf(
         ProduceListing("l1", "Farmer Ramesh", "Sona Masoori Rice", 500, 45.0, "Grade A", "Guntur, AP"),
         ProduceListing("l2", "Farmer Suresh", "Red Chillies", 200, 220.0, "Grade A", "Guntur, AP"),
-        ProduceListing("l3", "Farmer Kiran", "Turmeric", 1000, 180.0, "Grade B", "Erode, TN"),
+        ProduceListing("l3", "Farmer Kumar", "Turmeric", 150, 180.0, "Grade B", "Erode, TN"),
         ProduceListing("l4", "Farmer Devi", "Alphonso Mango", 300, 150.0, "Grade A", "Ratnagiri, MH")
     )
 
@@ -961,11 +1331,9 @@ fun BuyerMarketplaceScreen(navController: NavController) {
     }
 }
 
-// --- BUYFTER: TRACKING SCREEN ---
-@OptIn(ExperimentalMaterial3Api::class) // Corrected OptIn
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuyerTrackingScreen(navController: NavController) {
-    // Synopsis: Procurement Tracking & Real-time Order Tracking (Live GPS)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -986,15 +1354,12 @@ fun BuyerTrackingScreen(navController: NavController) {
             Spacer(Modifier.height(16.dp))
             Text("No Active Shipments", style = MaterialTheme.typography.headlineSmall, color = Color.Gray)
             Text("Your active order tracking will appear here.", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
-
-            // TODO: In a real app, show a list of active shipments with a map view.
         }
     }
 }
 
 
-// --- SHARED: NEGOTIAITON SCREEN ---
-@OptIn(ExperimentalMaterial3Api::class) // Corrected OptIn
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NegotiationScreen(
     navController: NavController,
@@ -1004,17 +1369,16 @@ fun NegotiationScreen(
     val mockListing = ProduceListing("l1", "Farmer Ramesh", "Sona Masoori Rice", 500, 45.0, "Grade A", "Guntur, AP")
     var messageText by rememberSaveable { mutableStateOf("") }
 
-    // Mock messages for the chat
     val messages = remember {
         mutableStateOf(listOf(
-            NegotiationMessage("m1", "Buyer", "Hi Ramesh, I'm interested in your Sona Masoori Rice.", System.currentTimeMillis() - 100000),
-            NegotiationMessage("m2", "Farmer", "Hello! I can offer the full 500kg. My price is ₹45/kg.", System.currentTimeMillis() - 80000),
+            NegotiationMessage("m1", "Farmer", "Base price is ₹45/kg", System.currentTimeMillis() - 120000),
+            NegotiationMessage("m2", "Buyer", "Willing to take 500kg. What is your best price?", System.currentTimeMillis() - 90000),
             NegotiationMessage("m3", "Buyer", "That's a bit high. Can you do ₹42/kg for the full lot? I can pay immediately.", System.currentTimeMillis() - 60000)
         ))
     }
 
     val onSend = {
-        if(messageText.isNotBlank()) {
+        if (messageText.isNotBlank()) {
             messages.value = messages.value + NegotiationMessage(
                 id = (messages.value.size + 1).toString(),
                 sender = if (userRole == UserRole.FARMER) "Farmer" else "Buyer",
@@ -1025,7 +1389,6 @@ fun NegotiationScreen(
         }
     }
 
-    // Synopsis: AI Quality Grading & Secure Escrow Payments
     var showDetailsSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
@@ -1084,12 +1447,18 @@ fun NegotiationScreen(
                 ListingDetailsSheetContent(
                     listing = mockListing,
                     userRole = userRole,
+                    onDismiss = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion {
+                            if (!sheetState.isVisible) {
+                                showDetailsSheet = false
+                            }
+                        }
+                    },
                     onAccept = {
                         scope.launch { sheetState.hide() }.invokeOnCompletion {
                             if (!sheetState.isVisible) {
                                 showDetailsSheet = false
                             }
-                            // TODO: Navigate to Escrow Payment
                         }
                     }
                 )
@@ -1100,11 +1469,11 @@ fun NegotiationScreen(
 
 @Composable
 fun MessageBubble(message: NegotiationMessage, myRole: UserRole) {
-    val isMine = (myRole == UserRole.FARMER && message.sender == "Farmer") || // Corrected: UserRole.FARMER
+    val isMine = (myRole == UserRole.FARMER && message.sender == "Farmer") ||
             (myRole == UserRole.BUYER && message.sender == "Buyer")
 
-    val bubbleColor = if (isMine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
-    val textColor = if (isMine) Color.White else Color.Black
+    val bubbleColor = if (isMine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer
+    val textColor = if (isMine) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
     val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
 
     Box(
@@ -1122,9 +1491,9 @@ fun MessageBubble(message: NegotiationMessage, myRole: UserRole) {
         ) {
             Text(
                 text = message.text,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 style = MaterialTheme.typography.bodyLarge,
                 color = textColor,
-                modifier = Modifier.padding(12.dp)
             )
         }
     }
@@ -1146,17 +1515,16 @@ fun NegotiationInputBar(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // VIO Button
             IconButton(onClick = { /* TODO: Voice Input */ }) {
-                Icon(Icons.Default.Mic, contentDescription = "Voice Input")
+                Icon(Icons.Default.Mic, contentDescription = "Voice Input", tint = Color.Gray)
             }
 
-            OutlinedTextField( // CHANGED from TextField to OutlinedTextField
+            OutlinedTextField(
                 value = text,
                 onValueChange = onTextChange,
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("Type your offer...") },
-                shape = RoundedCornerShape(24.dp) // ADDED shape back
+                shape = RoundedCornerShape(24.dp)
             )
 
             Spacer(Modifier.width(8.dp))
@@ -1164,6 +1532,7 @@ fun NegotiationInputBar(
             IconButton(
                 onClick = onSend,
                 modifier = Modifier
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
             ) {
@@ -1177,6 +1546,7 @@ fun NegotiationInputBar(
 fun ListingDetailsSheetContent(
     listing: ProduceListing,
     userRole: UserRole,
+    onDismiss: () -> Unit,
     onAccept: () -> Unit
 ) {
     Column(
@@ -1190,15 +1560,13 @@ fun ListingDetailsSheetContent(
         Text(listing.produceName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-        // AI Quality Grade
         DetailRow(icon = Icons.Default.CheckCircle, label = "AI Quality Grade", value = listing.aiQualityGrade)
-        DetailRow(icon = Icons.Default.ShoppingCart, label = "Quantity", value = "${listing.quantityKg} kg")
+        DetailRow(icon = Icons.Default.AddShoppingCart, label = "Total Quantity", value = "${listing.quantityKg} kg")
         DetailRow(icon = Icons.Default.Paid, label = "Base Price", value = "₹${listing.basePricePerKg}/kg")
         DetailRow(icon = Icons.Default.GpsFixed, label = "Location", value = listing.location)
 
         Spacer(Modifier.height(24.dp))
 
-        // Final action button
         Button(
             onClick = onAccept,
             modifier = Modifier
@@ -1216,14 +1584,14 @@ fun DetailRow(icon: ImageVector, label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = icon, // Explicitly named parameter
+            imageVector = icon,
             contentDescription = label,
             modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary // ADDED tint back
+            tint = MaterialTheme.colorScheme.primary
         )
         Spacer(Modifier.width(12.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
@@ -1231,6 +1599,4 @@ fun DetailRow(icon: ImageVector, label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }
-
-
 

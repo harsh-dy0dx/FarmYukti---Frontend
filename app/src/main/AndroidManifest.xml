@@ -2,10 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!--
-      Internet permission is required for Firebase (Auth, Firestore)
-      and any other network operations.
-    -->
+
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application

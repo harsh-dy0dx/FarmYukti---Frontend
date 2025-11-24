@@ -3,7 +3,7 @@
 
 [versions]
 # Core Plugins
-androidApplication = "8.4.1"
+androidApplication = "8.13.0"
 jetbrainsKotlinAndroid = "1.9.23"
 googleServices = "4.4.1"
 
