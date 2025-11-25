@@ -1,30 +1,22 @@
-# This file defines all the project's dependencies and plugins
-# It allows for easy version management from one central location.
-
 [versions]
-# Core Plugins
-androidApplication = "8.13.0"
-jetbrainsKotlinAndroid = "1.9.23"
-googleServices = "4.4.1"
-
-# AndroidX Libraries
+androidGradlePlugin = "8.3.2"
+# UPDATED: Changed from 1.9.22 to 1.9.23 to match Compose Compiler 1.5.11
+kotlin = "1.9.23"
 coreKtx = "1.13.1"
-lifecycleRuntimeKtx = "2.8.0"
+lifecycleRuntimeKtx = "2.8.1"
 activityCompose = "1.9.0"
 composeBom = "2024.05.00"
 navigationCompose = "2.7.7"
 materialIconsExtended = "1.6.7"
-
-# Firebase
-firebaseBom = "33.1.0"
-
-# Testing
 junit = "4.13.2"
 androidxJunit = "1.1.5"
 espressoCore = "3.5.1"
+googleServices = "4.4.1"
+firebaseBom = "33.1.0"
+firebaseStorageKtx = "22.0.1"
 
 [libraries]
-# AndroidX Core
+# Core Android
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 
@@ -33,29 +25,31 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
-# Corrected alias for material icons
-androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
 
+# Compose Navigation
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
+
+# Compose Icons
+androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
 
 # Firebase
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore-ktx" }
+firebase-storage = { group = "com.google.firebase", name = "firebase-storage-ktx" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxJunit" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+firebase-storage-ktx = { group = "com.google.firebase", name = "firebase-storage-ktx", version.ref = "firebaseStorageKtx" }
 
 [plugins]
-# These are the aliases for the plugins used in the build.gradle.kts files
-androidApplication = { id = "com.android.application", version.ref = "androidApplication" }
-jetbrainsKotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "jetbrainsKotlinAndroid" }
+androidApplication = { id = "com.android.application", version.ref = "androidGradlePlugin" }
+jetbrainsKotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
-

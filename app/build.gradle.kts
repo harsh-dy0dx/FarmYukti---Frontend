@@ -1,20 +1,14 @@
 plugins {
-    // Use the 'id' string here instead of the 'alias'
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.gms.google-services")
 }
 
 android {
-    //
-    // THIS IS THE FIX:
-    // Changed from "com.farmyukti.app" to match your project folder
-    //
     namespace = "com.example.farmyukti"
     compileSdk = 34
 
     defaultConfig {
-        // This should also match your package
         applicationId = "com.example.farmyukti"
         minSdk = 26
         targetSdk = 34
@@ -47,7 +41,8 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.11" // Make sure this matches your compose-bom version
+        // This version is compatible with Kotlin 1.9.23
+        kotlinCompilerExtensionVersion = "1.5.11"
     }
     packaging {
         resources {
@@ -57,31 +52,25 @@ android {
 }
 
 dependencies {
-    // Core Android dependencies
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-
-    // Jetpack Compose
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-
-    // Compose Navigation
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.compose.material.icons.extended)
+    // Cloudinary
+    implementation("com.cloudinary:cloudinary-android:2.5.0")
 
-    // Compose Icons (Material)
-    implementation(libs.androidx.compose.material.icons.extended) // Corrected alias
-
-    // Firebase (BoM - Bill of Materials)
+    // Firebase
     implementation(platform(libs.firebase.bom))
-    // Add specific Firebase services
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    //implementation(libs.firebase.storage)
 
-    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -90,4 +79,3 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
-

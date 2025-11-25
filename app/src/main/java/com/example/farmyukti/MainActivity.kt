@@ -1,9 +1,14 @@
 package com.example.farmyukti
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,9 +27,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -35,17 +42,21 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.PestControl
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
@@ -58,7 +69,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -109,6 +123,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cloudinary.android.MediaManager
+import com.cloudinary.android.callback.ErrorInfo
+import com.cloudinary.android.callback.UploadCallback
 import com.example.farmyukti.ui.theme.FarmyuktiTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
@@ -120,6 +137,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
 
 @Composable
 fun FarmyuktiTheme(content: @Composable () -> Unit) {
@@ -145,6 +163,17 @@ fun FarmyuktiTheme(content: @Composable () -> Unit) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize Cloudinary
+        // IMPORTANT: Replace with your actual Cloud Name from Cloudinary Dashboard
+        try {
+            val config = HashMap<String, String>()
+            config["cloud_name"] = "YOUR_CLOUD_NAME"
+            MediaManager.init(this, config)
+        } catch (e: Exception) {
+            // MediaManager already initialized
+        }
+
         setContent {
             FarmyuktiTheme {
                 FarmYuktiApp()
@@ -163,6 +192,8 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object FarmerHome : Screen("farmer_home", "Home", Icons.Default.Home)
     object FarmerListings : Screen("farmer_listings", "Listings", Icons.AutoMirrored.Filled.ListAlt)
     object FarmerAdvisory : Screen("farmer_advisory", "Advisory", Icons.Default.Eco)
+    object CreateListing : Screen("create_listing", "New Listing", Icons.Default.Add)
+
     object FarmerNegotiation : Screen("farmer_negotiation/{listingId}", "Negotiate", Icons.AutoMirrored.Filled.Chat) {
         fun createRoute(listingId: String) = "farmer_negotiation/$listingId"
     }
@@ -171,21 +202,26 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object BuyerHome : Screen("buyer_home", "Home", Icons.Default.Storefront)
     object BuyerMarketplace : Screen("buyer_marketplace", "Market", Icons.Default.ShoppingCart)
     object BuyerTracking : Screen("buyer_tracking", "Tracking", Icons.Default.LocalShipping)
-    object BuyerNegotiation : Screen("buyer_negotiation/{listingId}", "NegotiATE", Icons.AutoMirrored.Filled.Chat) {
+    object BuyerNegotiation : Screen("buyer_negotiation/{listingId}", "Negotiate", Icons.AutoMirrored.Filled.Chat) {
         fun createRoute(listingId: String) = "buyer_negotiation/$listingId"
     }
 }
 
 data class ProduceListing(
-    val id: String,
-    val farmerName: String,
-    val produceName: String,
-    val quantityKg: Int,
-    val basePricePerKg: Double,
-    val aiQualityGrade: String,
-    val location: String,
-    val imageUrl: String = "https://placehold.co/600x400/2E7D32/FFFFFF?text=Produce"
+    val id: String = "",
+    val farmerId: String = "",
+    val farmerName: String = "",
+    val contactNumber: String = "",
+    val produceName: String = "",
+    val quantityKg: String = "",
+    val basePricePerKg: String = "",
+    val aiQualityGrade: String = "",
+    val location: String = "",
+    val description: String = "",
+    val rating: String = "4.5",
+    val imageUrl: String = "" // Empty by default
 )
+
 data class Advisory(val id: String, val title: String, val type: AdvisoryType, val summary: String, val date: String)
 enum class AdvisoryType { CROP, FERTILIZER, PEST, WEATHER }
 data class NegotiationMessage(val id: String, val sender: String, val text: String, val timestamp: Long)
@@ -201,8 +237,12 @@ class AppViewModel : ViewModel() {
     private val _authUiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val authUiState: StateFlow<AuthUiState> = _authUiState.asStateFlow()
 
+    private val _listings = MutableStateFlow<List<ProduceListing>>(emptyList())
+    val listings: StateFlow<List<ProduceListing>> = _listings.asStateFlow()
+
     init {
         checkCurrentUser()
+        fetchListings()
     }
 
     private fun checkCurrentUser() {
@@ -223,12 +263,21 @@ class AppViewModel : ViewModel() {
             try {
                 val document = db.collection("users").document(uid).get().await()
                 val roleString = document.getString("role")
-                _userRole.value = when (roleString) {
+                val role = when (roleString) {
                     "FARMER" -> UserRole.FARMER
                     "BUYER" -> UserRole.BUYER
                     else -> null
                 }
-                _authUiState.value = AuthUiState.SignedIn
+
+                if (role != null) {
+                    _userRole.value = role
+                    _authUiState.value = AuthUiState.SignedIn
+                } else {
+                    // Role invalid or missing: Sign out and show error
+                    auth.signOut()
+                    _userRole.value = null
+                    _authUiState.value = AuthUiState.Error("User role not found. Please login again.")
+                }
             } catch (e: Exception) {
                 _authUiState.value = AuthUiState.Error("Failed to fetch user role: ${e.message}")
                 _userRole.value = null
@@ -251,7 +300,6 @@ class AppViewModel : ViewModel() {
                     )
                     db.collection("users").document(user.uid).set(userProfile).await()
 
-                    // Sign the new user out to force them to log in
                     auth.signOut()
                     _authUiState.value = AuthUiState.SignUpSuccess
                 } else {
@@ -280,6 +328,74 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    // --- NEW: Upload Image to Cloudinary & Create Listing ---
+    fun createListing(listing: ProduceListing, imageUri: Uri?, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            _authUiState.value = AuthUiState.Loading
+            val user = auth.currentUser
+
+            if (user != null) {
+                if (imageUri != null) {
+                    // Upload to Cloudinary
+                    // IMPORTANT: Replace "your_unsigned_preset" with the preset name from Cloudinary Settings -> Upload
+                    MediaManager.get().upload(imageUri)
+                        .unsigned("your_unsigned_preset")
+                        .callback(object : UploadCallback {
+                            override fun onStart(requestId: String) { }
+                            override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) { }
+
+                            override fun onSuccess(requestId: String, resultData: Map<*, *>) {
+                                val imageUrl = resultData["secure_url"] as String
+                                saveListingToFirestore(listing, imageUrl, user.uid, onComplete)
+                            }
+
+                            override fun onError(requestId: String, error: ErrorInfo) {
+                                _authUiState.value = AuthUiState.Error("Image upload failed: ${error.description}")
+                            }
+
+                            override fun onReschedule(requestId: String, error: ErrorInfo) { }
+                        })
+                        .dispatch()
+                } else {
+                    saveListingToFirestore(listing, "", user.uid, onComplete)
+                }
+            } else {
+                _authUiState.value = AuthUiState.Error("User not logged in")
+            }
+        }
+    }
+
+    private fun saveListingToFirestore(listing: ProduceListing, imageUrl: String, uid: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val newDocRef = db.collection("listings").document()
+                val newListing = listing.copy(
+                    farmerId = uid,
+                    id = newDocRef.id,
+                    imageUrl = imageUrl
+                )
+                newDocRef.set(newListing).await()
+                fetchListings()
+                _authUiState.value = AuthUiState.Idle
+                onComplete()
+            } catch (e: Exception) {
+                _authUiState.value = AuthUiState.Error("Failed to save listing: ${e.message}")
+            }
+        }
+    }
+
+    fun fetchListings() {
+        viewModelScope.launch {
+            try {
+                val snapshot = db.collection("listings").get().await()
+                val list = snapshot.toObjects(ProduceListing::class.java)
+                _listings.value = list
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
     fun logout() {
         auth.signOut()
         _userRole.value = null
@@ -288,7 +404,6 @@ class AppViewModel : ViewModel() {
 
     fun resetAuthState() {
         if (_authUiState.value is AuthUiState.Error || _authUiState.value is AuthUiState.SignUpSuccess) {
-            // Check if user is logged out, otherwise set to idle
             if (auth.currentUser == null) {
                 _authUiState.value = AuthUiState.SignedOut
             } else {
@@ -303,7 +418,7 @@ sealed class AuthUiState {
     object Loading : AuthUiState()
     object SignedIn : AuthUiState()
     object SignedOut : AuthUiState()
-    object SignUpSuccess : AuthUiState() // New state for sign-up success
+    object SignUpSuccess : AuthUiState()
     data class Error(val message: String?) : AuthUiState()
 }
 
@@ -322,7 +437,7 @@ fun FarmYuktiApp(
         if (authUiState is AuthUiState.Error) {
             val message = (authUiState as AuthUiState.Error).message
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-            appViewModel.resetAuthState() // Use new reset function
+            appViewModel.resetAuthState()
         }
     }
 
@@ -367,9 +482,18 @@ fun FarmYuktiApp(
                         popUpTo(Screen.FarmerMain.route) { inclusive = true }
                         launchSingleTop = true
                     }
-                }
+                },
+                appViewModel = appViewModel
             )
         }
+
+        composable(Screen.CreateListing.route) {
+            CreateListingScreen(
+                navController = navController,
+                appViewModel = appViewModel
+            )
+        }
+
         composable(Screen.FarmerNegotiation.route) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId") ?: "default"
             NegotiationScreen(navController = navController, listingId = listingId, userRole = UserRole.FARMER)
@@ -384,7 +508,8 @@ fun FarmYuktiApp(
                         popUpTo(Screen.BuyerMain.route) { inclusive = true }
                         launchSingleTop = true
                     }
-                }
+                },
+                appViewModel = appViewModel
             )
         }
         composable(Screen.BuyerNegotiation.route) { backStackEntry ->
@@ -415,6 +540,8 @@ fun LandingScreen(
                         UserRole.FARMER -> onNavigate(Screen.FarmerMain.route)
                         UserRole.BUYER -> onNavigate(Screen.BuyerMain.route)
                         null -> {
+                            // Should not happen with new fetch logic, but as a fallback:
+                            onNavigate(Screen.Auth.route)
                         }
                     }
                 }
@@ -497,9 +624,9 @@ fun SignUpScreen(
     LaunchedEffect(authUiState) {
         if (authUiState is AuthUiState.SignUpSuccess) {
             Toast.makeText(context, "Sign up successful! Please log in.", Toast.LENGTH_SHORT).show()
-            appViewModel.resetAuthState() // Reset the state
+            appViewModel.resetAuthState()
             navController.navigate(Screen.Login.route) {
-                popUpTo(Screen.Auth.route) { inclusive = true } // Navigate to Login, clear Auth stack
+                popUpTo(Screen.Auth.route) { inclusive = true }
             }
         }
     }
@@ -717,18 +844,14 @@ fun LoginScreen(
 @Composable
 fun FarmerMainScreen(
     navController: NavController,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    appViewModel: AppViewModel = viewModel()
 ) {
     val bottomNavController = rememberNavController()
-    val screens = listOf(
-        Screen.FarmerHome,
-        Screen.FarmerListings,
-        Screen.FarmerAdvisory
-    )
 
     Scaffold(
         bottomBar = {
-            FarmerBottomNavigationBar(navController = bottomNavController, items = screens)
+            FarmerBottomNavigationBar(navController = bottomNavController)
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
@@ -737,7 +860,7 @@ fun FarmerMainScreen(
                     FarmerHomeScreen(navController = navController, onLogout = onLogout)
                 }
                 composable(Screen.FarmerListings.route) {
-                    FarmerListingsScreen(navController = navController)
+                    FarmerListingsScreen(navController = navController, appViewModel = appViewModel)
                 }
                 composable(Screen.FarmerAdvisory.route) {
                     FarmerAdvisoryScreen(navController = navController)
@@ -748,7 +871,12 @@ fun FarmerMainScreen(
 }
 
 @Composable
-fun FarmerBottomNavigationBar(navController: NavController, items: List<Screen>) {
+fun FarmerBottomNavigationBar(navController: NavController) {
+    val items = listOf(
+        Screen.FarmerHome,
+        Screen.FarmerListings,
+        Screen.FarmerAdvisory
+    )
     NavigationBar {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
@@ -806,9 +934,21 @@ fun FarmerHomeScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
-                QuickActionCard(title = "New Listing", icon = Icons.Filled.AddShoppingCart, onClick = { /* TODO */ })
-                QuickActionCard(title = "My Chats", icon = Icons.AutoMirrored.Filled.Chat, onClick = { /* TODO */ })
-                QuickActionCard(title = "Pest Scan", icon = Icons.Filled.DocumentScanner, onClick = { /* TODO: Open Pest Sheet */ })
+                QuickActionCard(title = "New Listing", icon = Icons.Filled.AddShoppingCart, onClick = {
+                    navController.navigate(Screen.CreateListing.route)
+                })
+
+                val context = LocalContext.current
+                QuickActionCard(title = "My Chats", icon = Icons.AutoMirrored.Filled.Chat, onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW)
+                    intent.data = Uri.parse("https://wa.me/")
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
+                    }
+                })
+                QuickActionCard(title = "Pest Scan", icon = Icons.Filled.DocumentScanner, onClick = { /* TODO */ })
             }
             Spacer(Modifier.height(16.dp))
             Row(
@@ -836,6 +976,205 @@ fun FarmerHomeScreen(
                 Text("Log Out")
             }
             Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CreateListingScreen(
+    navController: NavController,
+    appViewModel: AppViewModel
+) {
+    var produceName by rememberSaveable { mutableStateOf("") }
+    var quantity by rememberSaveable { mutableStateOf("") }
+    var price by rememberSaveable { mutableStateOf("") }
+    var location by rememberSaveable { mutableStateOf("") }
+    var contactNumber by rememberSaveable { mutableStateOf("") }
+    var description by rememberSaveable { mutableStateOf("") }
+    var farmerName by rememberSaveable { mutableStateOf("") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+
+    var expanded by remember { mutableStateOf(false) }
+    val qualityOptions = listOf("Grade A", "Grade B", "Grade C")
+    var selectedQuality by remember { mutableStateOf(qualityOptions[0]) }
+
+    val context = LocalContext.current
+    val authUiState by appViewModel.authUiState.collectAsState()
+    val isLoading = authUiState is AuthUiState.Loading
+
+    val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        imageUri = uri
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Create New Listing") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Image Picker
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .background(Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
+                    .clickable { launcher.launch("image/*") },
+                contentAlignment = Alignment.Center
+            ) {
+                if (imageUri != null) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = "Selected", modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text("Image Selected", color = MaterialTheme.colorScheme.primary)
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Image, contentDescription = "Upload", modifier = Modifier.size(48.dp), tint = Color.Gray)
+                        Text("Tap to upload Crop Photo", color = Color.Gray)
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = produceName,
+                onValueChange = { produceName = it },
+                label = { Text("Crop Name (e.g. Wheat)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = farmerName,
+                onValueChange = { farmerName = it },
+                label = { Text("Your Name (Display Name)") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.AccountCircle, "") }
+            )
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it },
+                    label = { Text("Quantity (kg)") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { price = it },
+                    label = { Text("Price per kg (₹)") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    leadingIcon = { Icon(Icons.Default.AttachMoney, "") }
+                )
+            }
+
+            OutlinedTextField(
+                value = location,
+                onValueChange = { location = it },
+                label = { Text("Location (City/Village)") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.GpsFixed, "") }
+            )
+
+            OutlinedTextField(
+                value = contactNumber,
+                onValueChange = { contactNumber = it },
+                label = { Text("WhatsApp Number (+91...)") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                leadingIcon = { Icon(Icons.Default.Phone, "") }
+            )
+
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+                    readOnly = true,
+                    value = selectedQuality,
+                    onValueChange = {},
+                    label = { Text("Quality Grade") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    qualityOptions.forEach { selectionOption ->
+                        DropdownMenuItem(
+                            text = { Text(selectionOption) },
+                            onClick = {
+                                selectedQuality = selectionOption
+                                expanded = false
+                            },
+                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Additional Description (Optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                leadingIcon = { Icon(Icons.Default.Description, "") }
+            )
+
+            Button(
+                onClick = {
+                    if(produceName.isNotEmpty() && price.isNotEmpty()) {
+                        val newListing = ProduceListing(
+                            produceName = produceName,
+                            farmerName = farmerName,
+                            quantityKg = quantity,
+                            basePricePerKg = price,
+                            location = location,
+                            contactNumber = contactNumber,
+                            aiQualityGrade = selectedQuality,
+                            description = description
+                        )
+                        appViewModel.createListing(newListing, imageUri) {
+                            Toast.makeText(context, "Listing Created Successfully!", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
+                        }
+                    } else {
+                        Toast.makeText(context, "Please fill required fields", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                enabled = !isLoading
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Create Listing")
+                }
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -897,18 +1236,14 @@ fun QuickActionCard(title: String, icon: ImageVector, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FarmerListingsScreen(navController: NavController) {
-    val mockListings = listOf(
-        ProduceListing("l1", "My Farm", "Sona Masoori Rice", 500, 45.0, "Grade A", "Guntur, AP"),
-        ProduceListing("l2", "My Farm", "Red Chillies", 200, 220.0, "Grade A", "Guntur, AP"),
-        ProduceListing("l3", "My Farm", "Turmeric", 150, 180.0, "Grade B", "Erode, TN")
-    )
+fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewModel) {
+    val listings by appViewModel.listings.collectAsState()
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("My Produce Listings") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)) },
         floatingActionButton = {
             Button(
-                onClick = { /* TODO: Add new listing */ },
+                onClick = { navController.navigate(Screen.CreateListing.route) },
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.padding(end = 8.dp))
@@ -923,12 +1258,10 @@ fun FarmerListingsScreen(navController: NavController) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(mockListings) { listing ->
+            items(listings) { listing ->
                 ProduceListItem(
                     listing = listing,
-                    onClick = {
-                        navController.navigate(Screen.FarmerNegotiation.createRoute(listing.id))
-                    }
+                    onClick = { /* View Details */ }
                 )
             }
         }
@@ -939,8 +1272,11 @@ fun FarmerListingsScreen(navController: NavController) {
 fun ProduceListItem(
     listing: ProduceListing,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showChatButton: Boolean = false
 ) {
+    val context = LocalContext.current
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -965,17 +1301,39 @@ fun ProduceListItem(
                 Text(listing.produceName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("Qty: ${listing.quantityKg} kg", style = MaterialTheme.typography.bodyMedium)
                 Text("Price: ₹${listing.basePricePerKg}/kg", style = MaterialTheme.typography.bodyMedium)
-                Text("Location: ${listing.location}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text("Loc: ${listing.location}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, "", tint = Color(0xFFFFD700), modifier = Modifier.size(16.dp))
+                    Text(" ${listing.rating}", style = MaterialTheme.typography.bodySmall)
+                }
             }
 
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(listing.aiQualityGrade, color = Color.White, style = MaterialTheme.typography.labelMedium)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(listing.aiQualityGrade, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                }
+
+                if(showChatButton) {
+                    Spacer(Modifier.height(8.dp))
+                    IconButton(onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW)
+                        intent.data = Uri.parse("https://api.whatsapp.com/send?phone=${listing.contactNumber}")
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.Chat, "Chat", tint = Color(0xFF25D366)) // WhatsApp Green
+                    }
+                }
             }
         }
     }
@@ -991,7 +1349,7 @@ fun FarmerAdvisoryScreen(navController: NavController) {
         Advisory("c1", "Crop Rotation Plan", AdvisoryType.CROP, "Consider rotating with legumes to improve soil nitrogen.", "Nov 2, 2025"),
         Advisory("f1", "Fertilizer Dose - NPK", AdvisoryType.FERTILIZER, "Recommended NPK ratio for your soil test is 12:32:16.", "Nov 2, 2025"),
         Advisory("p1", "Pest Alert: Pod Borer", AdvisoryType.PEST, "Pod Borer activity detected in your area. Immediate action required.", "Nov 1, 2025"),
-        Advisory("w1", "Heavy Rain Warning", AdvisoryType.WEATHER, "Expect heavy rainfall in your region in the next 48 hours.", "Nov 1, 2025")
+        Advisory("w1", "Heavy Rain Warning", AdvisoryType.WEATHER, "Expect heavy rainfall in your region in the next48 hours.", "Nov 1, 2025")
     )
 
     val filteredAdvisories = mockAdvisories.filter {
@@ -1125,27 +1483,23 @@ fun PestDiagnosisSheetContent(onDismiss: () -> Unit) {
 @Composable
 fun BuyerMainScreen(
     navController: NavController,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    appViewModel: AppViewModel // Pass ViewModel to access listings
 ) {
     val bottomNavController = rememberNavController()
-    val screens = listOf(
-        Screen.BuyerHome,
-        Screen.BuyerMarketplace,
-        Screen.BuyerTracking
-    )
 
     Scaffold(
         bottomBar = {
-            BuyerBottomNavigationBar(navController = bottomNavController, items = screens)
+            BuyerBottomNavigationBar(navController = bottomNavController)
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             NavHost(navController = bottomNavController, startDestination = Screen.BuyerHome.route) {
                 composable(Screen.BuyerHome.route) {
-                    BuyerHomeScreen(navController = navController, onLogout = onLogout)
+                    BuyerHomeScreen(navController = navController, onLogout = onLogout, appViewModel = appViewModel)
                 }
                 composable(Screen.BuyerMarketplace.route) {
-                    BuyerMarketplaceScreen(navController = navController)
+                    BuyerMarketplaceScreen(navController = navController, appViewModel = appViewModel)
                 }
                 composable(Screen.BuyerTracking.route) {
                     BuyerTrackingScreen(navController = navController)
@@ -1156,7 +1510,12 @@ fun BuyerMainScreen(
 }
 
 @Composable
-fun BuyerBottomNavigationBar(navController: NavController, items: List<Screen>) {
+fun BuyerBottomNavigationBar(navController: NavController) {
+    val items = listOf(
+        Screen.BuyerHome,
+        Screen.BuyerMarketplace,
+        Screen.BuyerTracking
+    )
     NavigationBar {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
@@ -1183,13 +1542,11 @@ fun BuyerBottomNavigationBar(navController: NavController, items: List<Screen>) 
 @Composable
 fun BuyerHomeScreen(
     navController: NavController,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    appViewModel: AppViewModel
 ) {
     val featuredCategories = listOf("Rice", "Spices", "Pulses", "Fruits", "Vegetables")
-    val recentOrders = listOf(
-        ProduceListing("l1", "Farmer Ramesh", "Sona Masoori Rice", 500, 45.0, "Grade A", "Guntur, AP"),
-        ProduceListing("l2", "Farmer Suresh", "Red Chillies", 200, 220.0, "Grade A", "Guntur, AP")
-    )
+    val recentOrders by appViewModel.listings.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -1238,7 +1595,7 @@ fun BuyerHomeScreen(
 
         item {
             Text(
-                "My Recent Procurements",
+                "Recent Listings",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
             )
@@ -1250,7 +1607,8 @@ fun BuyerHomeScreen(
                 onClick = {
                     navController.navigate(Screen.BuyerNegotiation.createRoute(listing.id))
                 },
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = 16.dp),
+                showChatButton = true // Show chat button for buyers
             )
         }
 
@@ -1291,13 +1649,8 @@ fun CategoryChip(category: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BuyerMarketplaceScreen(navController: NavController) {
-    val mockListings = listOf(
-        ProduceListing("l1", "Farmer Ramesh", "Sona Masoori Rice", 500, 45.0, "Grade A", "Guntur, AP"),
-        ProduceListing("l2", "Farmer Suresh", "Red Chillies", 200, 220.0, "Grade A", "Guntur, AP"),
-        ProduceListing("l3", "Farmer Kumar", "Turmeric", 150, 180.0, "Grade B", "Erode, TN"),
-        ProduceListing("l4", "Farmer Devi", "Alphonso Mango", 300, 150.0, "Grade A", "Ratnagiri, MH")
-    )
+fun BuyerMarketplaceScreen(navController: NavController, appViewModel: AppViewModel) {
+    val listings by appViewModel.listings.collectAsState()
 
     Scaffold(
         topBar = {
@@ -1319,12 +1672,13 @@ fun BuyerMarketplaceScreen(navController: NavController) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(mockListings) { listing ->
+            items(listings) { listing ->
                 ProduceListItem(
                     listing = listing,
                     onClick = {
                         navController.navigate(Screen.BuyerNegotiation.createRoute(listing.id))
-                    }
+                    },
+                    showChatButton = true
                 )
             }
         }
@@ -1366,7 +1720,7 @@ fun NegotiationScreen(
     listingId: String,
     userRole: UserRole
 ) {
-    val mockListing = ProduceListing("l1", "Farmer Ramesh", "Sona Masoori Rice", 500, 45.0, "Grade A", "Guntur, AP")
+    val mockListing = ProduceListing("l1", "Farmer Ramesh", "Sona Masoori Rice", "500", "45.0", "Grade A", "Guntur, AP")
     var messageText by rememberSaveable { mutableStateOf("") }
 
     val messages = remember {
@@ -1599,4 +1953,3 @@ fun DetailRow(icon: ImageVector, label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }
-
