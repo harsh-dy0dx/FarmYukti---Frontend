@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.speech.RecognizerIntent
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -135,6 +136,8 @@ import coil.compose.AsyncImage
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
+import com.example.farmyukti.repo.MandiScreen
+//import com.example.farmyukti.ui.MandiScreen
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -186,6 +189,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             FarmyuktiTheme {
                 FarmYuktiApp()
+                //PlantDiagnosisScreen()
+                //CropRecommendationScreen()
             }
         }
     }
@@ -200,7 +205,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object FarmerMain : Screen("farmer_main", "Farmer", Icons.Default.Home)
     object FarmerHome : Screen("farmer_home", "Home", Icons.Default.Home)
     object FarmerListings : Screen("farmer_listings", "Listings", Icons.AutoMirrored.Filled.ListAlt)
-    object FarmerAdvisory : Screen("farmer_advisory", "Advisory", Icons.Default.Eco)
+
     object CreateListing : Screen("create_listing", "New Listing", Icons.Default.Add)
 
     object FarmerNegotiation : Screen("farmer_negotiation/{listingId}", "Negotiate", Icons.AutoMirrored.Filled.Chat) {
@@ -221,7 +226,12 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
 
     object Profile : Screen("profile", "Profile", Icons.Default.Person)
     object Favorites : Screen("favorites", "Favorites", Icons.Default.Favorite)
-    object PestScan : Screen("pest_scan", "Pest Scan", Icons.Default.DocumentScanner)
+
+
+    object Mandi : Screen("mandi", "Mandi Prices", Icons.Default.TrendingUp)
+    object FarmerAdvisary : Screen("FarmerAdi", "Advisery", Icons.Default.Eco)
+    object PestControl : Screen("pest_control", "Pest Control", Icons.Default.PestControl)
+    object CropRec : Screen("crop_rec", "Crop Recommendation", Icons.Default.WaterDrop)
 }
 
 data class ProduceListing(
@@ -746,9 +756,20 @@ fun FarmYuktiApp(
             FavoritesScreen(navController = navController, appViewModel = appViewModel)
         }
 
-        composable(Screen.PestScan.route) {
-            PestScanScreen(navController = navController, appViewModel = appViewModel)
+        composable(Screen.Mandi.route) {
+            MandiScreen(navController = navController)
         }
+
+        composable(Screen.FarmerAdvisary.route){
+            FarmerAdvisoryScreen(navController )
+        }
+        composable(Screen.PestControl.route){
+            PlantDiagnosisScreen(navController)
+        }
+        composable(Screen.CropRec.route){
+            CropRecommendationScreen(navController)
+        }
+
     }
 }
 
@@ -1085,6 +1106,9 @@ fun FarmerMainScreen(
                 composable(Screen.Profile.route) {
                     ProfileScreen(navController = navController, appViewModel = appViewModel)
                 }
+                composable(Screen.FarmerAdvisary.route) {
+                    FarmerAdvisoryScreen(navController = navController)
+                }
             }
         }
     }
@@ -1095,7 +1119,7 @@ fun FarmerBottomNavigationBar(navController: NavController) {
     val items = listOf(
         Screen.FarmerHome,
         Screen.FarmerListings,
-        Screen.FarmerAdvisory,
+        Screen.FarmerAdvisary,
         Screen.Profile
     )
     NavigationBar {
@@ -1108,13 +1132,23 @@ fun FarmerBottomNavigationBar(navController: NavController) {
                 label = { Text(screen.label) },
                 selected = currentRoute == screen.route,
                 onClick = {
+                    // --- CORRECTION STARTS HERE ---
+                    // We removed the if(screen.route == Advisory) check.
+                    // Now ALL screens use the optimized navigation logic.
                     navController.navigate(screen.route) {
+                        // Pop up to the start destination of the graph to
+                        // avoid building up a large stack of destinations
+                        // on the back stack as users select items
                         popUpTo(navController.graph.findStartDestination().id) {
                             saveState = true
                         }
+                        // Avoid multiple copies of the same destination when
+                        // reselecting the same item
                         launchSingleTop = true
+                        // Restore state when reselecting a previously selected item
                         restoreState = true
                     }
+                    // --- CORRECTION ENDS HERE ---
                 }
             )
         }
@@ -1185,23 +1219,18 @@ fun FarmerHomeScreen(
                 })
 
                 val context = LocalContext.current
-                QuickActionCard(title = "My Chats", icon = Icons.AutoMirrored.Filled.Chat, onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW)
-                    intent.data = Uri.parse("https://wa.me/")
-                    try {
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
-                    }
-                })
-                QuickActionCard(title = "Pest Scan", icon = Icons.Filled.DocumentScanner, onClick = { navController.navigate(Screen.PestScan.route) })
+                QuickActionCard(title = "Crop Recommendation", icon = Icons.AutoMirrored.Filled.Chat, onClick = {navController.navigate(
+                    Screen.CropRec.route) })
+
+                QuickActionCard(title = "Pest Scan", icon = Icons.Filled.DocumentScanner, onClick = { navController.navigate(
+                    Screen.PestControl.route) })
             }
             Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
-                QuickActionCard(title = "Market Prices", icon = Icons.Filled.TrendingUp, onClick = { /* TODO */ })
+                QuickActionCard(title = "Market Prices", icon = Icons.Filled.TrendingUp, onClick = { navController.navigate(Screen.Mandi.route) })
 
                 QuickActionCard(title = "Favourites", icon = Icons.Default.Favorite, onClick = {
                     navController.navigate(Screen.Favorites.route)
@@ -1236,7 +1265,7 @@ fun BuyerMainScreen(
                 composable(Screen.BuyerTracking.route) {
                     BuyerTrackingScreen(navController = navController)
                 }
-                composable(Screen.FarmerAdvisory.route) {
+                composable(Screen.FarmerAdvisary.route) {
                     FarmerAdvisoryScreen(navController = navController)
                 }
                 composable(Screen.Profile.route) {
@@ -2383,7 +2412,7 @@ fun FavoritesScreen(navController: NavController, appViewModel: AppViewModel) {
         }
     }
 }
-object FarmerAdvisory : Screen("farmer_advisory", "Advisory", Icons.Default.Eco)
+//object FarmerAdvisory : Screen("farmer_advisory", "Advisory", Icons.Default.Eco)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FarmerAdvisoryScreen(navController: NavController) {
@@ -2450,8 +2479,51 @@ fun RainfallAdvisoryContent() {
 }
 
 @Composable
-fun AdvisoryCard(x0: Advisory) {
-    TODO("Not yet implemented")
+fun AdvisoryCard(advisory: Advisory) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = when(advisory.type) {
+                    AdvisoryType.WEATHER -> Icons.Default.WaterDrop
+                    AdvisoryType.PEST -> Icons.Default.PestControl
+                    AdvisoryType.FERTILIZER -> Icons.Default.Eco
+                    AdvisoryType.CROP -> Icons.Default.Eco
+                    else -> Icons.Default.Warning
+                },
+                contentDescription = "Advisory Icon",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = advisory.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = advisory.summary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = advisory.date,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -2464,7 +2536,7 @@ fun PestAdvisoryContent(navController: NavController) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Button(
-            onClick = { navController.navigate(Screen.PestScan.route) },
+            onClick = { navController.navigate(Screen.PestControl.route) },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
@@ -2555,91 +2627,3 @@ fun SowingAdvisoryContent() {
     }
 }
 
-// --- NEW: Pest Scan Screen ---
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PestScanScreen(navController: NavController, appViewModel: AppViewModel) {
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var resultTitle by remember { mutableStateOf("") }
-    var resultDesc by remember { mutableStateOf("") }
-
-    val authUiState by appViewModel.authUiState.collectAsState()
-    val isLoading = authUiState is AuthUiState.Loading
-
-    val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-        imageUri = uri
-        if (uri != null) {
-            // Simulate Scan
-            appViewModel.analyzePestImage(uri) { title, desc ->
-                resultTitle = title
-                resultDesc = desc
-            }
-        }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("AI Pest Diagnosis") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFEEEEEE))
-                    .clickable { launcher.launch("image/*") },
-                contentAlignment = Alignment.Center
-            ) {
-                if (imageUri != null) {
-                    AsyncImage(
-                        model = imageUri,
-                        contentDescription = "Scanned Image",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                    if(isLoading) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    }
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.DocumentScanner, "Scan", modifier = Modifier.size(64.dp), tint = Color.Gray)
-                        Text("Tap to upload Crop Photo", color = Color.Gray)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            if (resultTitle.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)) // Light Red warning color
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Diagnosis Result", style = MaterialTheme.typography.labelLarge, color = Color.Red)
-                        Spacer(Modifier.height(8.dp))
-                        Text(resultTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Text(resultDesc, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        }
-    }
-}

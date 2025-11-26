@@ -65,11 +65,16 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.4.0")
     // Cloudinary
     implementation("com.cloudinary:cloudinary-android:2.5.0")
+    //retrofit
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
 
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.generativeai)
     //implementation(libs.firebase.storage)
 
     testImplementation(libs.junit)
