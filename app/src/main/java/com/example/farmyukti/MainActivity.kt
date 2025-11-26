@@ -191,6 +191,11 @@ class MainActivity : ComponentActivity() {
                 FarmYuktiApp()
                 //PlantDiagnosisScreen()
                 //CropRecommendationScreen()
+
+
+//                AutoSlidingBanner(DataModelist,onBannerClick = { clickedBanner ->
+//                    println("Clicked on: ${clickedBanner.title}")
+//                })
             }
         }
     }
@@ -1160,10 +1165,7 @@ fun FarmerHomeScreen(
     navController: NavController,
     appViewModel: AppViewModel
 ) {
-    val mockAdvisories = listOf(
-        Advisory("w1", "Heavy Rain Warning", AdvisoryType.WEATHER, "Expect heavy rainfall in your region in the next 48 hours. Secure any open storage.", "Nov 1, 2025"),
-        Advisory("p1", "Pest Alert: Pod Borer", AdvisoryType.PEST, "Pod Borer activity detected in your area. Immediate action required.", "Nov 1, 2025")
-    )
+
     val userProfile by appViewModel.userProfile.collectAsState()
     val userName = userProfile?.name ?: "Farmer"
 
@@ -1197,13 +1199,11 @@ fun FarmerHomeScreen(
             Spacer(Modifier.height(8.dp))
         }
 
-        item {
-            Text("Personalized Early Warnings", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp))
-        }
-
-        items(mockAdvisories) { advisory ->
-            WarningAdvisoryCard(advisory = advisory, modifier = Modifier.padding(horizontal = 16.dp))
-        }
+       item {
+           AutoSlidingBanner(DataModelist,onBannerClick = { clickedBanner ->
+               println("Clicked on: ${clickedBanner.title}")
+           })
+       }
 
         item {
             Text("Quick Actions", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp, start = 16.dp))
