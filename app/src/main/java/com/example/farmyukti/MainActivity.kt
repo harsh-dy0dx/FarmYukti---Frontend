@@ -1,9 +1,10 @@
 package com.example.farmyukti
 
-import android.content.Context
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -44,10 +45,14 @@ import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
@@ -55,6 +60,7 @@ import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Password
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PestControl
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
@@ -62,6 +68,7 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Button
@@ -88,6 +95,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -123,22 +131,25 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
-import com.example.farmyukti.ui.theme.FarmyuktiTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.Locale
 import java.util.UUID
 
+// --- THEME ---
 @Composable
 fun FarmyuktiTheme(content: @Composable () -> Unit) {
     MaterialTheme(
@@ -164,11 +175,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize Cloudinary
-        // IMPORTANT: Replace with your actual Cloud Name from Cloudinary Dashboard
         try {
             val config = HashMap<String, String>()
-            config["cloud_name"] = "YOUR_CLOUD_NAME"
+            config["cloud_name"] = "dhrqr1wiv" // Your Cloud Name
             MediaManager.init(this, config)
         } catch (e: Exception) {
             // MediaManager already initialized
@@ -205,6 +214,14 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object BuyerNegotiation : Screen("buyer_negotiation/{listingId}", "Negotiate", Icons.AutoMirrored.Filled.Chat) {
         fun createRoute(listingId: String) = "buyer_negotiation/$listingId"
     }
+
+    object ListingDetail : Screen("listing_detail/{listingId}", "Detail", Icons.Default.Description) {
+        fun createRoute(listingId: String) = "listing_detail/$listingId"
+    }
+
+    object Profile : Screen("profile", "Profile", Icons.Default.Person)
+    object Favorites : Screen("favorites", "Favorites", Icons.Default.Favorite)
+    object PestScan : Screen("pest_scan", "Pest Scan", Icons.Default.DocumentScanner)
 }
 
 data class ProduceListing(
@@ -219,13 +236,22 @@ data class ProduceListing(
     val location: String = "",
     val description: String = "",
     val rating: String = "4.5",
-    val imageUrl: String = "" // Empty by default
+    val imageUrl: String = ""
 )
 
 data class Advisory(val id: String, val title: String, val type: AdvisoryType, val summary: String, val date: String)
 enum class AdvisoryType { CROP, FERTILIZER, PEST, WEATHER }
 data class NegotiationMessage(val id: String, val sender: String, val text: String, val timestamp: Long)
-data class UserProfile(val uid: String = "", val role: String = "", val farmerId: String = "")
+data class UserProfile(
+    val uid: String = "",
+    val role: String = "",
+    val email: String = "",
+    val name: String = "",
+    val mobile: String = "",
+    val agriStackId: String = "",
+    val isVerified: Boolean = false,
+    val favorites: List<String> = emptyList()
+)
 
 class AppViewModel : ViewModel() {
     private val auth: FirebaseAuth = Firebase.auth
@@ -234,11 +260,21 @@ class AppViewModel : ViewModel() {
     private val _userRole = MutableStateFlow<UserRole?>(null)
     val userRole: StateFlow<UserRole?> = _userRole.asStateFlow()
 
+    private val _userProfile = MutableStateFlow<UserProfile?>(null)
+    val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
+
+    private val _verificationStatus = MutableStateFlow<VerificationState>(VerificationState.Idle)
+    val verificationStatus: StateFlow<VerificationState> = _verificationStatus.asStateFlow()
+
     private val _authUiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val authUiState: StateFlow<AuthUiState> = _authUiState.asStateFlow()
 
     private val _listings = MutableStateFlow<List<ProduceListing>>(emptyList())
     val listings: StateFlow<List<ProduceListing>> = _listings.asStateFlow()
+
+    // State for filtered favorites
+    private val _favoriteListings = MutableStateFlow<List<ProduceListing>>(emptyList())
+    val favoriteListings: StateFlow<List<ProduceListing>> = _favoriteListings.asStateFlow()
 
     init {
         checkCurrentUser()
@@ -250,37 +286,131 @@ class AppViewModel : ViewModel() {
             _authUiState.value = AuthUiState.Loading
             val user = auth.currentUser
             if (user != null) {
-                fetchUserRole(user.uid)
+                fetchUserData(user.uid)
             } else {
                 _authUiState.value = AuthUiState.SignedOut
+                _userRole.value = null
+                _userProfile.value = null
+            }
+        }
+    }
+
+    fun fetchUserData(uid: String) {
+        viewModelScope.launch {
+            try {
+                val document = db.collection("users").document(uid).get().await()
+                val profile = document.toObject(UserProfile::class.java)
+
+                if (profile != null) {
+                    _userProfile.value = profile
+                    _userRole.value = when (profile.role) {
+                        "FARMER" -> UserRole.FARMER
+                        "BUYER" -> UserRole.BUYER
+                        else -> null
+                    }
+                    _authUiState.value = AuthUiState.SignedIn
+                    updateFavoriteListings()
+                } else {
+                    auth.signOut()
+                    _userRole.value = null
+                    _authUiState.value = AuthUiState.Error("User profile not found. Please login again.")
+                }
+            } catch (e: Exception) {
+                _authUiState.value = AuthUiState.Error("Failed to fetch user data: ${e.message}")
                 _userRole.value = null
             }
         }
     }
 
-    fun fetchUserRole(uid: String) {
+    private fun updateFavoriteListings() {
+        val allListings = _listings.value
+        val favIds = _userProfile.value?.favorites ?: emptyList()
+        _favoriteListings.value = allListings.filter { favIds.contains(it.id) }
+    }
+
+    fun updateUserProfile(name: String, mobile: String, agriStackId: String, onComplete: () -> Unit) {
         viewModelScope.launch {
+            val user = auth.currentUser
+            if (user != null) {
+                val updates = mapOf(
+                    "name" to name,
+                    "mobile" to mobile,
+                    "agriStackId" to agriStackId
+                )
+                try {
+                    db.collection("users").document(user.uid).update(updates).await()
+                    fetchUserData(user.uid)
+                    onComplete()
+                } catch (e: Exception) {
+                    _authUiState.value = AuthUiState.Error("Failed to update profile: ${e.message}")
+                }
+            }
+        }
+    }
+
+    fun verifyAgriStackId(agriStackId: String) {
+        viewModelScope.launch {
+            if (agriStackId.length != 11) {
+                _verificationStatus.value = VerificationState.Error("ID must be exactly 11 digits")
+                return@launch
+            }
+
+            _verificationStatus.value = VerificationState.Loading
+
             try {
-                val document = db.collection("users").document(uid).get().await()
-                val roleString = document.getString("role")
-                val role = when (roleString) {
-                    "FARMER" -> UserRole.FARMER
-                    "BUYER" -> UserRole.BUYER
-                    else -> null
+                val agriRef = db.collection("agristack_ids").document(agriStackId)
+                val agriDoc = agriRef.get().await()
+
+                if (agriDoc.exists()) {
+                    val linkedEmail = agriDoc.getString("linked_email")
+                    val currentUserEmail = auth.currentUser?.email
+
+                    if (!linkedEmail.isNullOrEmpty() && linkedEmail != currentUserEmail) {
+                        _verificationStatus.value = VerificationState.Error("This ID is already linked to another account ($linkedEmail).")
+                        return@launch
+                    }
+
+                    if (linkedEmail.isNullOrEmpty() && currentUserEmail != null) {
+                        agriRef.update("linked_email", currentUserEmail).await()
+                    }
+
+                    val user = auth.currentUser
+                    if (user != null) {
+                        db.collection("users").document(user.uid).update("isVerified", true).await()
+                        fetchUserData(user.uid)
+                        _verificationStatus.value = VerificationState.Success
+                    }
+                } else {
+                    _verificationStatus.value = VerificationState.Error("Invalid AgriStack ID. Not found in database.")
                 }
 
-                if (role != null) {
-                    _userRole.value = role
-                    _authUiState.value = AuthUiState.SignedIn
-                } else {
-                    // Role invalid or missing: Sign out and show error
-                    auth.signOut()
-                    _userRole.value = null
-                    _authUiState.value = AuthUiState.Error("User role not found. Please login again.")
-                }
             } catch (e: Exception) {
-                _authUiState.value = AuthUiState.Error("Failed to fetch user role: ${e.message}")
-                _userRole.value = null
+                _verificationStatus.value = VerificationState.Error("Verification failed: ${e.message}")
+            }
+        }
+    }
+
+    fun resetVerificationStatus() {
+        _verificationStatus.value = VerificationState.Idle
+    }
+
+    fun toggleFavorite(listingId: String) {
+        val user = auth.currentUser ?: return
+        val currentFavorites = _userProfile.value?.favorites ?: emptyList()
+
+        val isFavorite = currentFavorites.contains(listingId)
+        val newFavorites = if (isFavorite) {
+            currentFavorites - listingId
+        } else {
+            currentFavorites + listingId
+        }
+
+        viewModelScope.launch {
+            try {
+                db.collection("users").document(user.uid).update("favorites", newFavorites).await()
+                fetchUserData(user.uid)
+            } catch (e: Exception) {
+                // Handle error
             }
         }
     }
@@ -289,21 +419,63 @@ class AppViewModel : ViewModel() {
         viewModelScope.launch {
             _authUiState.value = AuthUiState.Loading
             try {
-                val authResult = auth.createUserWithEmailAndPassword(email, password).await()
-                val user = authResult.user
-                if (user != null) {
-                    val userProfile = mapOf(
-                        "uid" to user.uid,
-                        "email" to email,
-                        "role" to role.name,
-                        "farmerId" to if (role == UserRole.FARMER) farmerId else ""
-                    )
-                    db.collection("users").document(user.uid).set(userProfile).await()
+                if (role == UserRole.FARMER) {
+                    val agriRef = db.collection("agristack_ids").document(farmerId)
+                    val agriDoc = agriRef.get().await()
 
-                    auth.signOut()
-                    _authUiState.value = AuthUiState.SignUpSuccess
+                    if (!agriDoc.exists()) {
+                        _authUiState.value = AuthUiState.Error("Invalid AgriStack ID. ID not found in our records.")
+                        return@launch
+                    }
+
+                    val linkedEmail = agriDoc.getString("linked_email")
+                    if (!linkedEmail.isNullOrEmpty()) {
+                        _authUiState.value = AuthUiState.Error("This AgriStack ID is already claimed by another email.")
+                        return@launch
+                    }
+
+                    val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+                    val user = authResult.user
+
+                    if (user != null) {
+                        agriRef.update("linked_email", email).await()
+
+                        user.sendEmailVerification().await()
+
+                        val userProfile = UserProfile(
+                            uid = user.uid,
+                            email = email,
+                            role = role.name,
+                            agriStackId = farmerId,
+                            isVerified = true
+                        )
+                        db.collection("users").document(user.uid).set(userProfile).await()
+
+                        auth.signOut()
+                        _authUiState.value = AuthUiState.SignUpSuccess
+                    } else {
+                        _authUiState.value = AuthUiState.Error("Sign up failed: User creation failed.")
+                    }
                 } else {
-                    _authUiState.value = AuthUiState.Error("Sign up failed: User is null")
+                    val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+                    val user = authResult.user
+                    if (user != null) {
+                        user.sendEmailVerification().await()
+
+                        val userProfile = UserProfile(
+                            uid = user.uid,
+                            email = email,
+                            role = role.name,
+                            agriStackId = "",
+                            isVerified = false
+                        )
+                        db.collection("users").document(user.uid).set(userProfile).await()
+
+                        auth.signOut()
+                        _authUiState.value = AuthUiState.SignUpSuccess
+                    } else {
+                        _authUiState.value = AuthUiState.Error("Sign up failed: User creation failed.")
+                    }
                 }
             } catch (e: Exception) {
                 _authUiState.value = AuthUiState.Error("Sign up failed: ${e.message}")
@@ -318,7 +490,12 @@ class AppViewModel : ViewModel() {
                 val authResult = auth.signInWithEmailAndPassword(email, password).await()
                 val user = authResult.user
                 if (user != null) {
-                    fetchUserRole(user.uid)
+                    if (user.isEmailVerified) {
+                        fetchUserData(user.uid)
+                    } else {
+                        auth.signOut()
+                        _authUiState.value = AuthUiState.Error("Please verify your email address before logging in.")
+                    }
                 } else {
                     _authUiState.value = AuthUiState.Error("Login failed: User is null")
                 }
@@ -328,7 +505,23 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    // --- NEW: Upload Image to Cloudinary & Create Listing ---
+    fun resetPassword(email: String) {
+        viewModelScope.launch {
+            if (email.isEmpty()) {
+                _authUiState.value = AuthUiState.Error("Please enter your email address first.")
+                return@launch
+            }
+
+            _authUiState.value = AuthUiState.Loading
+            try {
+                auth.sendPasswordResetEmail(email).await()
+                _authUiState.value = AuthUiState.Error("Password reset email sent! Check your inbox.")
+            } catch (e: Exception) {
+                _authUiState.value = AuthUiState.Error("Failed to send reset email: ${e.message}")
+            }
+        }
+    }
+
     fun createListing(listing: ProduceListing, imageUri: Uri?, onComplete: () -> Unit) {
         viewModelScope.launch {
             _authUiState.value = AuthUiState.Loading
@@ -336,10 +529,8 @@ class AppViewModel : ViewModel() {
 
             if (user != null) {
                 if (imageUri != null) {
-                    // Upload to Cloudinary
-                    // IMPORTANT: Replace "your_unsigned_preset" with the preset name from Cloudinary Settings -> Upload
                     MediaManager.get().upload(imageUri)
-                        .unsigned("your_unsigned_preset")
+                        .unsigned("farmyukti_preset")
                         .callback(object : UploadCallback {
                             override fun onStart(requestId: String) { }
                             override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) { }
@@ -369,10 +560,16 @@ class AppViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val newDocRef = db.collection("listings").document()
+                val currentProfile = _userProfile.value
+                val userName = currentProfile?.name ?: "Unknown Farmer"
+                val userContact = currentProfile?.mobile ?: ""
+
                 val newListing = listing.copy(
                     farmerId = uid,
                     id = newDocRef.id,
-                    imageUrl = imageUrl
+                    imageUrl = imageUrl,
+                    farmerName = userName,
+                    contactNumber = if (listing.contactNumber.isNotEmpty()) listing.contactNumber else userContact
                 )
                 newDocRef.set(newListing).await()
                 fetchListings()
@@ -384,21 +581,38 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    fun deleteListing(listingId: String) {
+        viewModelScope.launch {
+            try {
+                db.collection("listings").document(listingId).delete().await()
+                fetchListings() // Refresh
+            } catch (e: Exception) {
+                _authUiState.value = AuthUiState.Error("Failed to delete listing: ${e.message}")
+            }
+        }
+    }
+
     fun fetchListings() {
         viewModelScope.launch {
             try {
                 val snapshot = db.collection("listings").get().await()
                 val list = snapshot.toObjects(ProduceListing::class.java)
                 _listings.value = list
+                updateFavoriteListings()
             } catch (e: Exception) {
                 // Handle error
             }
         }
     }
 
+    fun getListingById(id: String): ProduceListing? {
+        return _listings.value.find { it.id == id }
+    }
+
     fun logout() {
         auth.signOut()
         _userRole.value = null
+        _userProfile.value = null
         _authUiState.value = AuthUiState.SignedOut
     }
 
@@ -411,6 +625,15 @@ class AppViewModel : ViewModel() {
             }
         }
     }
+
+    fun analyzePestImage(imageUri: Uri, onComplete: (String, String) -> Unit) {
+        viewModelScope.launch {
+            _authUiState.value = AuthUiState.Loading
+            delay(3000) // Simulate AI Processing Time
+            _authUiState.value = AuthUiState.Idle
+            onComplete("Fall Armyworm Detected", "High Severity. Recommended Treatment: Apply Neem Oil or Emamectin Benzoate.")
+        }
+    }
 }
 
 sealed class AuthUiState {
@@ -420,6 +643,13 @@ sealed class AuthUiState {
     object SignedOut : AuthUiState()
     object SignUpSuccess : AuthUiState()
     data class Error(val message: String?) : AuthUiState()
+}
+
+sealed class VerificationState {
+    object Idle : VerificationState()
+    object Loading : VerificationState()
+    object Success : VerificationState()
+    data class Error(val message: String) : VerificationState()
 }
 
 enum class UserRole { FARMER, BUYER }
@@ -460,38 +690,22 @@ fun FarmYuktiApp(
         }
 
         composable(Screen.Login.route) {
-            LoginScreen(
-                navController = navController,
-                appViewModel = appViewModel
-            )
+            LoginScreen(navController = navController, appViewModel = appViewModel)
         }
 
         composable(Screen.SignUp.route) {
-            SignUpScreen(
-                navController = navController,
-                appViewModel = appViewModel
-            )
+            SignUpScreen(navController = navController, appViewModel = appViewModel)
         }
 
         composable(Screen.FarmerMain.route) {
             FarmerMainScreen(
                 navController = navController,
-                onLogout = {
-                    appViewModel.logout()
-                    navController.navigate(Screen.Auth.route) {
-                        popUpTo(Screen.FarmerMain.route) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
                 appViewModel = appViewModel
             )
         }
 
         composable(Screen.CreateListing.route) {
-            CreateListingScreen(
-                navController = navController,
-                appViewModel = appViewModel
-            )
+            CreateListingScreen(navController = navController, appViewModel = appViewModel)
         }
 
         composable(Screen.FarmerNegotiation.route) { backStackEntry ->
@@ -502,19 +716,38 @@ fun FarmYuktiApp(
         composable(Screen.BuyerMain.route) {
             BuyerMainScreen(
                 navController = navController,
-                onLogout = {
-                    appViewModel.logout()
-                    navController.navigate(Screen.Auth.route) {
-                        popUpTo(Screen.BuyerMain.route) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
                 appViewModel = appViewModel
             )
         }
+
         composable(Screen.BuyerNegotiation.route) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId") ?: "default"
             NegotiationScreen(navController = navController, listingId = listingId, userRole = UserRole.BUYER)
+        }
+
+        composable(Screen.ListingDetail.route) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId")
+            if (listingId != null) {
+                val listing = appViewModel.getListingById(listingId)
+                if (listing != null) {
+                    ListingDetailScreen(navController = navController, listing = listing, appViewModel = appViewModel)
+                }
+            }
+        }
+
+        composable(Screen.Profile.route) {
+            ProfileScreen(
+                navController = navController,
+                appViewModel = appViewModel
+            )
+        }
+
+        composable(Screen.Favorites.route) {
+            FavoritesScreen(navController = navController, appViewModel = appViewModel)
+        }
+
+        composable(Screen.PestScan.route) {
+            PestScanScreen(navController = navController, appViewModel = appViewModel)
         }
     }
 }
@@ -539,10 +772,7 @@ fun LandingScreen(
                     when (userRole) {
                         UserRole.FARMER -> onNavigate(Screen.FarmerMain.route)
                         UserRole.BUYER -> onNavigate(Screen.BuyerMain.route)
-                        null -> {
-                            // Should not happen with new fetch logic, but as a fallback:
-                            onNavigate(Screen.Auth.route)
-                        }
+                        null -> { }
                     }
                 }
                 is AuthUiState.SignedOut -> {
@@ -551,8 +781,7 @@ fun LandingScreen(
                 is AuthUiState.Error -> {
                     onNavigate(Screen.Auth.route)
                 }
-                else -> {
-                }
+                else -> { }
             }
         }
     }
@@ -584,9 +813,7 @@ fun AuthScreen(
 
         Button(
             onClick = onLoginClicked,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp),
+            modifier = Modifier.fillMaxWidth().height(60.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text("Login", fontSize = 18.sp)
@@ -596,9 +823,7 @@ fun AuthScreen(
 
         OutlinedButton(
             onClick = onSignUpClicked,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp),
+            modifier = Modifier.fillMaxWidth().height(60.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text("Sign Up", fontSize = 18.sp)
@@ -623,7 +848,7 @@ fun SignUpScreen(
 
     LaunchedEffect(authUiState) {
         if (authUiState is AuthUiState.SignUpSuccess) {
-            Toast.makeText(context, "Sign up successful! Please log in.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Sign up successful! Please check your email to verify account.", Toast.LENGTH_LONG).show()
             appViewModel.resetAuthState()
             navController.navigate(Screen.Login.route) {
                 popUpTo(Screen.Auth.route) { inclusive = true }
@@ -807,6 +1032,14 @@ fun LoginScreen(
                 leadingIcon = { Icon(Icons.Default.Password, contentDescription = "Password") }
             )
 
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                TextButton(onClick = {
+                    appViewModel.resetPassword(email)
+                }) {
+                    Text("Forgot Password?", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
 
             Button(
@@ -824,19 +1057,6 @@ fun LoginScreen(
                     Text("Login")
                 }
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = { /* TODO: VIO Login */ },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                enabled = !isLoading
-            ) {
-                Icon(Icons.Default.Mic, contentDescription = "Voice Login", modifier = Modifier.padding(end = 8.dp))
-                Text("Login with Voice")
-            }
         }
     }
 }
@@ -844,7 +1064,6 @@ fun LoginScreen(
 @Composable
 fun FarmerMainScreen(
     navController: NavController,
-    onLogout: () -> Unit,
     appViewModel: AppViewModel = viewModel()
 ) {
     val bottomNavController = rememberNavController()
@@ -857,13 +1076,14 @@ fun FarmerMainScreen(
         Box(modifier = Modifier.padding(padding)) {
             NavHost(navController = bottomNavController, startDestination = Screen.FarmerHome.route) {
                 composable(Screen.FarmerHome.route) {
-                    FarmerHomeScreen(navController = navController, onLogout = onLogout)
+                    FarmerHomeScreen(navController = navController, appViewModel = appViewModel)
                 }
                 composable(Screen.FarmerListings.route) {
                     FarmerListingsScreen(navController = navController, appViewModel = appViewModel)
                 }
-                composable(Screen.FarmerAdvisory.route) {
-                    FarmerAdvisoryScreen(navController = navController)
+
+                composable(Screen.Profile.route) {
+                    ProfileScreen(navController = navController, appViewModel = appViewModel)
                 }
             }
         }
@@ -875,7 +1095,8 @@ fun FarmerBottomNavigationBar(navController: NavController) {
     val items = listOf(
         Screen.FarmerHome,
         Screen.FarmerListings,
-        Screen.FarmerAdvisory
+        Screen.FarmerAdvisory,
+        Screen.Profile
     )
     NavigationBar {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -903,12 +1124,14 @@ fun FarmerBottomNavigationBar(navController: NavController) {
 @Composable
 fun FarmerHomeScreen(
     navController: NavController,
-    onLogout: () -> Unit
+    appViewModel: AppViewModel
 ) {
     val mockAdvisories = listOf(
         Advisory("w1", "Heavy Rain Warning", AdvisoryType.WEATHER, "Expect heavy rainfall in your region in the next 48 hours. Secure any open storage.", "Nov 1, 2025"),
         Advisory("p1", "Pest Alert: Pod Borer", AdvisoryType.PEST, "Pod Borer activity detected in your area. Immediate action required.", "Nov 1, 2025")
     )
+    val userProfile by appViewModel.userProfile.collectAsState()
+    val userName = userProfile?.name ?: "Farmer"
 
     LazyColumn(
         modifier = Modifier
@@ -917,6 +1140,29 @@ fun FarmerHomeScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Top Bar with greeting
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Welcome Back,", style = MaterialTheme.typography.bodyLarge)
+                    Text("Hi $userName", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = "Profile",
+                    modifier = Modifier.size(48.dp).clickable { navController.navigate(Screen.Profile.route) },
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         item {
             Text("Personalized Early Warnings", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp))
         }
@@ -948,7 +1194,7 @@ fun FarmerHomeScreen(
                         Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
                     }
                 })
-                QuickActionCard(title = "Pest Scan", icon = Icons.Filled.DocumentScanner, onClick = { /* TODO */ })
+                QuickActionCard(title = "Pest Scan", icon = Icons.Filled.DocumentScanner, onClick = { navController.navigate(Screen.PestScan.route) })
             }
             Spacer(Modifier.height(16.dp))
             Row(
@@ -956,26 +1202,336 @@ fun FarmerHomeScreen(
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 QuickActionCard(title = "Market Prices", icon = Icons.Filled.TrendingUp, onClick = { /* TODO */ })
-                QuickActionCard(title = "Voice Help", icon = Icons.Default.Mic, onClick = { /* TODO */ })
-                QuickActionCard(title = "My Profile", icon = Icons.Filled.AccountCircle, onClick = { /* TODO */ })
+
+                QuickActionCard(title = "Favourites", icon = Icons.Default.Favorite, onClick = {
+                    navController.navigate(Screen.Favorites.route)
+                })
+
+                QuickActionCard(title = "My Profile", icon = Icons.Filled.AccountCircle, onClick = { navController.navigate(Screen.Profile.route) })
+            }
+        }
+    }
+}
+
+@Composable
+fun BuyerMainScreen(
+    navController: NavController,
+    appViewModel: AppViewModel // Pass ViewModel to access listings
+) {
+    val bottomNavController = rememberNavController()
+
+    Scaffold(
+        bottomBar = {
+            BuyerBottomNavigationBar(navController = bottomNavController)
+        }
+    ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+            NavHost(navController = bottomNavController, startDestination = Screen.BuyerHome.route) {
+                composable(Screen.BuyerHome.route) {
+                    BuyerHomeScreen(navController = navController, appViewModel = appViewModel)
+                }
+                composable(Screen.BuyerMarketplace.route) {
+                    BuyerMarketplaceScreen(navController = navController, appViewModel = appViewModel)
+                }
+                composable(Screen.BuyerTracking.route) {
+                    BuyerTrackingScreen(navController = navController)
+                }
+                composable(Screen.FarmerAdvisory.route) {
+                    FarmerAdvisoryScreen(navController = navController)
+                }
+                composable(Screen.Profile.route) {
+                    ProfileScreen(navController = navController, appViewModel = appViewModel)
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun BuyerBottomNavigationBar(navController: NavController) {
+    val items = listOf(
+        Screen.BuyerHome,
+        Screen.BuyerMarketplace,
+        Screen.BuyerTracking,
+        Screen.Profile // Added Profile
+    )
+    NavigationBar {
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = navBackStackEntry?.destination?.route
+
+        items.forEach { screen ->
+            NavigationBarItem(
+                icon = { Icon(screen.icon, contentDescription = screen.label) },
+                label = { Text(screen.label) },
+                selected = currentRoute == screen.route,
+                onClick = {
+                    navController.navigate(screen.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun BuyerHomeScreen(
+    navController: NavController,
+    appViewModel: AppViewModel
+) {
+    val featuredCategories = listOf("Rice", "Spices", "Pulses", "Fruits", "Vegetables")
+    val recentOrders by appViewModel.listings.collectAsState()
+    val userProfile by appViewModel.userProfile.collectAsState()
+    val userName = userProfile?.name ?: "Buyer"
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF5F5F5)),
+        contentPadding = PaddingValues(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Top Bar with greeting
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Welcome Back,", style = MaterialTheme.typography.bodyLarge)
+                    Text("Hi $userName", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = "Profile",
+                    modifier = Modifier.size(48.dp).clickable { navController.navigate(Screen.Profile.route) },
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        item {
+            OutlinedTextField(
+                value = "",
+                onValueChange = {},
+                placeholder = { Text("Search all produce...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+
+        item {
+            Text(
+                "Shop by Category",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+
+        item {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(featuredCategories) { category ->
+                    CategoryChip(category)
+                }
             }
         }
 
         item {
+            Text(
+                "Recent Listings",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+            )
+        }
+
+        items(recentOrders) { listing ->
+            ProduceListItem(
+                listing = listing,
+                onClick = {
+                    navController.navigate(Screen.ListingDetail.createRoute(listing.id))
+                },
+                modifier = Modifier.padding(horizontal = 16.dp),
+                showChatButton = true
+            )
+        }
+    }
+}
+
+@Composable
+fun CategoryChip(category: String) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Text(
+            text = category,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileScreen(navController: NavController, appViewModel: AppViewModel) {
+    val userProfile by appViewModel.userProfile.collectAsState()
+    val verificationStatus by appViewModel.verificationStatus.collectAsState()
+
+    var name by remember { mutableStateOf(userProfile?.name ?: "") }
+    var mobile by remember { mutableStateOf(userProfile?.mobile ?: "") }
+    var agriStackId by remember { mutableStateOf(userProfile?.agriStackId ?: "") }
+
+    val context = LocalContext.current
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("My Profile") },
+                navigationIcon = {
+                    // No back icon if opened from bottom bar, but good to have if pushed
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = "Profile Pic",
+                modifier = Modifier.size(100.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(Modifier.height(16.dp))
+            Text(userProfile?.email ?: "", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+            Text(userProfile?.role ?: "", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
             Spacer(Modifier.height(32.dp))
-            OutlinedButton(
-                onClick = onLogout,
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Full Name") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Person, "") }
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = mobile,
+                onValueChange = { mobile = it },
+                label = { Text("Mobile Number") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                leadingIcon = { Icon(Icons.Default.Phone, "") }
+            )
+
+            if (userProfile?.role == "FARMER") {
+                Spacer(Modifier.height(16.dp))
+                // AgriStack ID Section with Verification
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = agriStackId,
+                        onValueChange = { agriStackId = it },
+                        label = { Text("AgriStack Farmer ID") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        leadingIcon = { Icon(Icons.Default.AccountCircle, "") }
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    if (userProfile?.isVerified == true) {
+                        Icon(Icons.Default.Verified, "Verified", tint = Color.Blue, modifier = Modifier.size(32.dp))
+                    } else {
+                        Button(
+                            onClick = { appViewModel.verifyAgriStackId(agriStackId) },
+                            enabled = verificationStatus !is VerificationState.Loading
+                        ) {
+                            if (verificationStatus is VerificationState.Loading) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
+                            } else {
+                                Text("Verify")
+                            }
+                        }
+                    }
+                }
+                if (verificationStatus is VerificationState.Error) {
+                    Text(
+                        text = (verificationStatus as VerificationState.Error).message,
+                        color = Color.Red,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+                if (verificationStatus is VerificationState.Success) {
+                    Text(
+                        text = "Verification Successful!",
+                        color = Color(0xFF2E7D32),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            Button(
+                onClick = {
+                    appViewModel.updateUserProfile(name, mobile, agriStackId) {
+                        Toast.makeText(context, "Profile Updated Successfully", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+                    .height(50.dp)
+            ) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                Text("Save Profile")
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = {
+                    appViewModel.logout()
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true } // Clear entire stack
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
                     .height(50.dp),
-                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
             ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log Out", modifier = Modifier.padding(end = 8.dp))
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                 Text("Log Out")
             }
-            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -1261,7 +1817,12 @@ fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewMode
             items(listings) { listing ->
                 ProduceListItem(
                     listing = listing,
-                    onClick = { /* View Details */ }
+                    onClick = {
+                        navController.navigate(Screen.ListingDetail.createRoute(listing.id))
+                    },
+                    onDelete = {
+                        appViewModel.deleteListing(listing.id)
+                    }
                 )
             }
         }
@@ -1273,7 +1834,8 @@ fun ProduceListItem(
     listing: ProduceListing,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    showChatButton: Boolean = false
+    showChatButton: Boolean = false,
+    onDelete: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -1285,15 +1847,27 @@ fun ProduceListItem(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(modifier = Modifier.padding(12.dp)) {
-            Image(
-                painter = painterResource(id = android.R.drawable.ic_menu_gallery),
-                contentDescription = listing.produceName,
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Gray),
-                contentScale = ContentScale.Crop
-            )
+            if (listing.imageUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = listing.imageUrl,
+                    contentDescription = listing.produceName,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.LightGray),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = android.R.drawable.ic_menu_gallery),
+                    contentDescription = listing.produceName,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Gray),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             Spacer(Modifier.width(16.dp))
 
@@ -1302,11 +1876,6 @@ fun ProduceListItem(
                 Text("Qty: ${listing.quantityKg} kg", style = MaterialTheme.typography.bodyMedium)
                 Text("Price: ₹${listing.basePricePerKg}/kg", style = MaterialTheme.typography.bodyMedium)
                 Text("Loc: ${listing.location}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Star, "", tint = Color(0xFFFFD700), modifier = Modifier.size(16.dp))
-                    Text(" ${listing.rating}", style = MaterialTheme.typography.bodySmall)
-                }
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1320,6 +1889,12 @@ fun ProduceListItem(
                     Text(listing.aiQualityGrade, color = Color.White, style = MaterialTheme.typography.labelMedium)
                 }
 
+                if (onDelete != null) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red)
+                    }
+                }
+
                 if(showChatButton) {
                     Spacer(Modifier.height(8.dp))
                     IconButton(onClick = {
@@ -1331,319 +1906,11 @@ fun ProduceListItem(
                             Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
                         }
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.Chat, "Chat", tint = Color(0xFF25D366)) // WhatsApp Green
+                        Icon(Icons.AutoMirrored.Filled.Chat, "Chat", tint = Color(0xFF25D366))
                     }
                 }
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FarmerAdvisoryScreen(navController: NavController) {
-    val advisoryTypes = listOf("All", "Crop", "Fertilizer", "Pest", "Weather")
-    var selectedType by remember { mutableStateOf(advisoryTypes[0]) }
-
-    val mockAdvisories = listOf(
-        Advisory("c1", "Crop Rotation Plan", AdvisoryType.CROP, "Consider rotating with legumes to improve soil nitrogen.", "Nov 2, 2025"),
-        Advisory("f1", "Fertilizer Dose - NPK", AdvisoryType.FERTILIZER, "Recommended NPK ratio for your soil test is 12:32:16.", "Nov 2, 2025"),
-        Advisory("p1", "Pest Alert: Pod Borer", AdvisoryType.PEST, "Pod Borer activity detected in your area. Immediate action required.", "Nov 1, 2025"),
-        Advisory("w1", "Heavy Rain Warning", AdvisoryType.WEATHER, "Expect heavy rainfall in your region in the next48 hours.", "Nov 1, 2025")
-    )
-
-    val filteredAdvisories = mockAdvisories.filter {
-        selectedType == "All" || it.type.name.equals(selectedType, ignoreCase = true)
-    }
-
-    var showPestSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState()
-
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("Agronomy Advisory") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)) }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                Button(
-                    onClick = { showPestSheet = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                ) {
-                    Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", modifier = Modifier.padding(end = 8.dp))
-                    Text("Diagnose Pest/Disease (AI Scan)")
-                }
-            }
-
-            item {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    advisoryTypes.forEachIndexed { index, label ->
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = advisoryTypes.size),
-                            onClick = { selectedType = label },
-                            selected = label == selectedType
-                        ) {
-                            Text(label)
-                        }
-                    }
-                }
-            }
-
-            items(filteredAdvisories) { advisory ->
-                AdvisoryCard(advisory)
-            }
-        }
-
-        if (showPestSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showPestSheet = false },
-                sheetState = sheetState
-            ) {
-                PestDiagnosisSheetContent(onDismiss = { showPestSheet = false })
-            }
-        }
-    }
-}
-
-@Composable
-fun AdvisoryCard(advisory: Advisory) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    when (advisory.type) {
-                        AdvisoryType.CROP -> Icons.Default.Eco
-                        AdvisoryType.FERTILIZER -> Icons.Default.WaterDrop
-                        AdvisoryType.PEST -> Icons.Default.PestControl
-                        AdvisoryType.WEATHER -> Icons.Default.Warning
-                    },
-                    contentDescription = advisory.type.name,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    advisory.type.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(advisory.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(advisory.summary, style = MaterialTheme.typography.bodyMedium)
-            Text(advisory.date, style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
-        }
-    }
-}
-
-@Composable
-fun PestDiagnosisSheetContent(onDismiss: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("AI Pest & Disease Diagnosis", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(16.dp))
-        Text("Upload an image of the affected crop. Our AI will analyze it and provide immediate treatment advice.", textAlign = TextAlign.Center)
-        Spacer(Modifier.height(24.dp))
-
-        Button(
-            onClick = { /* TODO: Launch Camera */ },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-        ) {
-            Text("Open Camera")
-        }
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = { /* TODO: Launch Gallery */ },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-        ) {
-            Text("Upload from Gallery")
-        }
-        Spacer(Modifier.height(16.dp))
-    }
-}
-
-@Composable
-fun BuyerMainScreen(
-    navController: NavController,
-    onLogout: () -> Unit,
-    appViewModel: AppViewModel // Pass ViewModel to access listings
-) {
-    val bottomNavController = rememberNavController()
-
-    Scaffold(
-        bottomBar = {
-            BuyerBottomNavigationBar(navController = bottomNavController)
-        }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            NavHost(navController = bottomNavController, startDestination = Screen.BuyerHome.route) {
-                composable(Screen.BuyerHome.route) {
-                    BuyerHomeScreen(navController = navController, onLogout = onLogout, appViewModel = appViewModel)
-                }
-                composable(Screen.BuyerMarketplace.route) {
-                    BuyerMarketplaceScreen(navController = navController, appViewModel = appViewModel)
-                }
-                composable(Screen.BuyerTracking.route) {
-                    BuyerTrackingScreen(navController = navController)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun BuyerBottomNavigationBar(navController: NavController) {
-    val items = listOf(
-        Screen.BuyerHome,
-        Screen.BuyerMarketplace,
-        Screen.BuyerTracking
-    )
-    NavigationBar {
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
-        val currentRoute = navBackStackEntry?.destination?.route
-
-        items.forEach { screen ->
-            NavigationBarItem(
-                icon = { Icon(screen.icon, contentDescription = screen.label) },
-                label = { Text(screen.label) },
-                selected = currentRoute == screen.route,
-                onClick = {
-                    navController.navigate(screen.route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun BuyerHomeScreen(
-    navController: NavController,
-    onLogout: () -> Unit,
-    appViewModel: AppViewModel
-) {
-    val featuredCategories = listOf("Rice", "Spices", "Pulses", "Fruits", "Vegetables")
-    val recentOrders by appViewModel.listings.collectAsState()
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF5F5F5)),
-        contentPadding = PaddingValues(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Text(
-                "Welcome, Buyer",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = "",
-                onValueChange = {},
-                placeholder = { Text("Search all produce...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(16.dp)
-            )
-        }
-
-        item {
-            Text(
-                "Shop by Category",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
-        item {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(featuredCategories) { category ->
-                    CategoryChip(category)
-                }
-            }
-        }
-
-        item {
-            Text(
-                "Recent Listings",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
-            )
-        }
-
-        items(recentOrders) { listing ->
-            ProduceListItem(
-                listing = listing,
-                onClick = {
-                    navController.navigate(Screen.BuyerNegotiation.createRoute(listing.id))
-                },
-                modifier = Modifier.padding(horizontal = 16.dp),
-                showChatButton = true // Show chat button for buyers
-            )
-        }
-
-        item {
-            Spacer(Modifier.height(32.dp))
-            OutlinedButton(
-                onClick = onLogout,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(50.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log Out", modifier = Modifier.padding(end = 8.dp))
-                Text("Log Out")
-            }
-            Spacer(Modifier.height(16.dp))
-        }
-    }
-}
-
-@Composable
-fun CategoryChip(category: String) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-    ) {
-        Text(
-            text = category,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            color = MaterialTheme.colorScheme.onPrimaryContainer
-        )
     }
 }
 
@@ -1676,7 +1943,7 @@ fun BuyerMarketplaceScreen(navController: NavController, appViewModel: AppViewMo
                 ProduceListItem(
                     listing = listing,
                     onClick = {
-                        navController.navigate(Screen.BuyerNegotiation.createRoute(listing.id))
+                        navController.navigate(Screen.ListingDetail.createRoute(listing.id))
                     },
                     showChatButton = true
                 )
@@ -1711,7 +1978,6 @@ fun BuyerTrackingScreen(navController: NavController) {
         }
     }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1951,5 +2217,429 @@ fun DetailRow(icon: ImageVector, label: String, value: String) {
         Text(label, style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
         Spacer(Modifier.weight(1f))
         Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+    }
+}
+
+// --- NEW: Listing Detail Screen with Favorites ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ListingDetailScreen(navController: NavController, listing: ProduceListing, appViewModel: AppViewModel) {
+    val context = LocalContext.current
+    // Observe profile to check favorite status
+    val userProfile by appViewModel.userProfile.collectAsState()
+    val isFavorite = userProfile?.favorites?.contains(listing.id) == true
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(listing.produceName) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    // Favorite Toggle Icon
+                    IconButton(onClick = { appViewModel.toggleFavorite(listing.id) }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (isFavorite) Color.Red else Color.Gray
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Image
+            if (listing.imageUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = listing.imageUrl,
+                    contentDescription = listing.produceName,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(250.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.LightGray),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(250.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Gray),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Image, "No Image", tint = Color.White, modifier = Modifier.size(64.dp))
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text(listing.produceName, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("Sold by: ${listing.farmerName}", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+
+            Spacer(Modifier.height(16.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Star, "", tint = Color(0xFFFFD700))
+                Text(" ${listing.rating} Rating", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.width(16.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(listing.aiQualityGrade, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            DetailRow(Icons.Default.AttachMoney, "Price", "₹${listing.basePricePerKg}/kg")
+            DetailRow(Icons.Default.ShoppingCart, "Quantity Available", "${listing.quantityKg} kg")
+            DetailRow(Icons.Default.GpsFixed, "Location", listing.location)
+
+            Spacer(Modifier.height(16.dp))
+            Text("Description", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(listing.description.ifEmpty { "No description provided." }, style = MaterialTheme.typography.bodyMedium)
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW)
+                    intent.data = Uri.parse("https://api.whatsapp.com/send?phone=${listing.contactNumber}")
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)) // WhatsApp Green
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", modifier = Modifier.padding(end = 8.dp))
+                Text("Chat on WhatsApp")
+            }
+        }
+    }
+}
+
+// --- NEW: Favorites Screen ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FavoritesScreen(navController: NavController, appViewModel: AppViewModel) {
+    val favoriteListings by appViewModel.favoriteListings.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("My Favourites") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { padding ->
+        if (favoriteListings.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Text("No favorites yet!", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(favoriteListings) { listing ->
+                    ProduceListItem(
+                        listing = listing,
+                        onClick = {
+                            navController.navigate(Screen.ListingDetail.createRoute(listing.id))
+                        },
+                        showChatButton = true
+                    )
+                }
+            }
+        }
+    }
+}
+object FarmerAdvisory : Screen("farmer_advisory", "Advisory", Icons.Default.Eco)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FarmerAdvisoryScreen(navController: NavController) {
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val tabs = listOf("Rainfall", "Pest", "Fertilizer", "Sowing")
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Advisory Services") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding)) {
+            androidx.compose.material3.TabRow(selectedTabIndex = selectedTabIndex) {
+                tabs.forEachIndexed { index, title ->
+                    androidx.compose.material3.Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = { Text(title, maxLines = 1) }
+                    )
+                }
+            }
+
+            when (selectedTabIndex) {
+                0 -> RainfallAdvisoryContent()
+                1 -> PestAdvisoryContent(navController)
+                2 -> FertilizerAdvisoryContent()
+                3 -> SowingAdvisoryContent()
+            }
+        }
+    }
+}
+
+@Composable
+fun RainfallAdvisoryContent() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        AdvisoryCard(
+            Advisory(
+                id = "r1",
+                title = "Heavy Rain Alert",
+                type = AdvisoryType.WEATHER,
+                summary = "Heavy rainfall expected in next 48 hours. Ensure proper drainage in fields.",
+                date = "Nov 25, 2025"
+            )
+        )
+        AdvisoryCard(
+            Advisory(
+                id = "r2",
+                title = "Irrigation Advisory",
+                type = AdvisoryType.WEATHER,
+                summary = "Due to forecasted rain, pause irrigation for the next 3 days to save water.",
+                date = "Nov 25, 2025"
+            )
+        )
+    }
+}
+
+@Composable
+fun AdvisoryCard(x0: Advisory) {
+    TODO("Not yet implemented")
+}
+
+@Composable
+fun PestAdvisoryContent(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Button(
+            onClick = { navController.navigate(Screen.PestScan.route) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+        ) {
+            Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", modifier = Modifier.padding(end = 8.dp))
+            Text("AI Pest Scan")
+        }
+
+        AdvisoryCard(
+            Advisory(
+                id = "p1",
+                title = "Fall Armyworm Alert",
+                type = AdvisoryType.PEST,
+                summary = "High risk of Fall Armyworm in Maize. Check for egg masses on leaves.",
+                date = "Nov 24, 2025"
+            )
+        )
+        AdvisoryCard(
+            Advisory(
+                id = "p2",
+                title = "Aphid Control",
+                type = AdvisoryType.PEST,
+                summary = "Use Neem oil spray (5ml/L) for controlling early aphid infestation.",
+                date = "Nov 20, 2025"
+            )
+        )
+    }
+}
+
+@Composable
+fun FertilizerAdvisoryContent() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        AdvisoryCard(
+            Advisory(
+                id = "f1",
+                title = "Wheat Fertilizer Schedule",
+                type = AdvisoryType.FERTILIZER,
+                summary = "Apply first dose of Urea (40kg/acre) 21 days after sowing after first irrigation.",
+                date = "Nov 25, 2025"
+            )
+        )
+        AdvisoryCard(
+            Advisory(
+                id = "f2",
+                title = "Soil Health Card",
+                type = AdvisoryType.FERTILIZER,
+                summary = "Your soil is low in Zinc. Apply Zinc Sulphate (10kg/acre) before sowing.",
+                date = "Oct 15, 2025"
+            )
+        )
+    }
+}
+
+@Composable
+fun SowingAdvisoryContent() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        AdvisoryCard(
+            Advisory(
+                id = "s1",
+                title = "Wheat Sowing Window",
+                type = AdvisoryType.CROP,
+                summary = "Optimal time for sowing Wheat (HD-2967) is Nov 1 to Nov 15. Delay may reduce yield.",
+                date = "Nov 01, 2025"
+            )
+        )
+        AdvisoryCard(
+            Advisory(
+                id = "s2",
+                title = "Seed Treatment",
+                type = AdvisoryType.CROP,
+                summary = "Treat seeds with Bavistin (2g/kg) to prevent fungal diseases.",
+                date = "Oct 28, 2025"
+            )
+        )
+    }
+}
+
+// --- NEW: Pest Scan Screen ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PestScanScreen(navController: NavController, appViewModel: AppViewModel) {
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var resultTitle by remember { mutableStateOf("") }
+    var resultDesc by remember { mutableStateOf("") }
+
+    val authUiState by appViewModel.authUiState.collectAsState()
+    val isLoading = authUiState is AuthUiState.Loading
+
+    val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        imageUri = uri
+        if (uri != null) {
+            // Simulate Scan
+            appViewModel.analyzePestImage(uri) { title, desc ->
+                resultTitle = title
+                resultDesc = desc
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("AI Pest Diagnosis") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFFEEEEEE))
+                    .clickable { launcher.launch("image/*") },
+                contentAlignment = Alignment.Center
+            ) {
+                if (imageUri != null) {
+                    AsyncImage(
+                        model = imageUri,
+                        contentDescription = "Scanned Image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    if(isLoading) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.DocumentScanner, "Scan", modifier = Modifier.size(64.dp), tint = Color.Gray)
+                        Text("Tap to upload Crop Photo", color = Color.Gray)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            if (resultTitle.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)) // Light Red warning color
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Diagnosis Result", style = MaterialTheme.typography.labelLarge, color = Color.Red)
+                        Spacer(Modifier.height(8.dp))
+                        Text(resultTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        Text(resultDesc, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        }
     }
 }
