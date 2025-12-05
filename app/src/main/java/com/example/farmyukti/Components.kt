@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.farmyukti.repo.safeClickable
 import kotlinx.coroutines.delay
 
 var DataModelist : List<BannerModel> = mutableListOf(
@@ -70,7 +71,7 @@ fun AutoSlidingBanner(banners: List<BannerModel>, modifier: Modifier = Modifier,
 
 @Composable
 fun BannerItem(banner: BannerModel, onClick: () -> Unit) {
-    Card(shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp), modifier = Modifier.fillMaxSize().clickable { onClick() }) {
+    Card(shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp), modifier = Modifier.fillMaxSize().safeClickable{ onClick() }) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(model = banner.imageUrl, contentDescription = banner.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
@@ -79,7 +80,7 @@ fun BannerItem(banner: BannerModel, onClick: () -> Unit) {
 
 @Composable
 fun QuickActionCard(title: String, icon: ImageVector, onClick: () -> Unit) {
-    Column(modifier = Modifier.clickable { onClick() }.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    Column(modifier = Modifier.safeClickable { onClick() }.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Box(modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = title, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
         }
@@ -118,7 +119,7 @@ fun AdvisoryCard(advisory: Advisory) {
 @Composable
 fun ProduceListItem(listing: ProduceListing, onClick: () -> Unit, modifier: Modifier = Modifier, showChatButton: Boolean = false, onDelete: (() -> Unit)? = null) {
     val context = LocalContext.current
-    Card(modifier = modifier.fillMaxWidth().clickable { onClick() }, elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(modifier = modifier.fillMaxWidth().safeClickable { onClick() }, elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(modifier = Modifier.padding(12.dp)) {
             if (listing.imageUrl.isNotEmpty()) {
                 AsyncImage(model = listing.imageUrl, contentDescription = listing.produceName, modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)).background(Color.LightGray), contentScale = ContentScale.Crop)

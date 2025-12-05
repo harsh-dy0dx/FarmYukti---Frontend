@@ -2,6 +2,9 @@ package com.example.farmyukti.repo
 
 
 import com.example.farmyukti.model.MandiRootResponse
+import com.example.farmyukti.model.WeatherResponse
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
 
@@ -31,3 +34,16 @@ interface MandiApiService {
 
     ): MandiRootResponse
 }
+
+//weather
+
+
+interface WeatherApiService {
+    @GET("v1/current.json")
+    suspend fun getCurrentWeather(
+        @Query("key") apiKey: String,
+        @Query("q") location: String, // 'q' is the query parameter for the city/location
+        @Query("aqi") includeAqi: String // 'aqi' parameter
+    ): WeatherResponse
+}
+

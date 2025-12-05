@@ -45,6 +45,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
+import com.example.farmyukti.repo.safeClickable
 import java.io.File
 import java.io.FileOutputStream
 
@@ -259,7 +260,7 @@ fun FarmerHomeScreen(navController: NavController, appViewModel: AppViewModel) {
         item {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column { Text("Welcome Back,", style = MaterialTheme.typography.bodyLarge); Text("Hi ${userProfile?.name ?: "Farmer"}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
-                Icon(Icons.Default.AccountCircle, "Profile", modifier = Modifier.size(48.dp).clickable { navController.navigate(Screen.Profile.route) }, tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.AccountCircle, "Profile", modifier = Modifier.size(48.dp).safeClickable { navController.navigate(Screen.Profile.route) }, tint = MaterialTheme.colorScheme.primary)
             }
         }
         item { AutoSlidingBanner(DataModelist) { } }

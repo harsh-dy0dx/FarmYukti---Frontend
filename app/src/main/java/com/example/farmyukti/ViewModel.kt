@@ -1,11 +1,16 @@
 package com.example.farmyukti
 
 import android.net.Uri
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
+import com.example.farmyukti.model.WeatherResponse
+import com.example.farmyukti.repo.RetrofitClientWeather
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -375,6 +380,46 @@ class AppViewModel : ViewModel() {
     fun resetAuthState() {
         if (_authUiState.value is AuthUiState.Error || _authUiState.value is AuthUiState.SignUpSuccess) {
             _authUiState.value = if(auth.currentUser == null) AuthUiState.SignedOut else AuthUiState.Idle
+        }
+    }
+
+
+
+
+
+    //weather
+
+    // LiveData/State to hold the result
+    var weatherData by mutableStateOf<WeatherResponse?>(null)
+        private set
+
+    var isLoading by mutableStateOf(false)
+        private set
+
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    // Replace with your actual key from the API call screenshot: 5fa0c1fe2923498bbb33154728250512
+    private val API_KEY = "YOUR_API_KEY_HERE"
+
+    fun fetchWeather(city: String) {
+        isLoading = true
+        error = null
+
+        viewModelScope.launch {
+            try {
+                // The parameters match your original API call structure
+                val response = RetrofitClientWeather.weatherService.getCurrentWeather(
+                    apiKey = API_KEY,
+                    location = city,
+                    includeAqi = "yes"
+                )
+                weatherData = response
+            } catch (e: Exception) {
+                error = "Failed to fetch weather: ${e.message}"
+            } finally {
+                isLoading = false
+            }
         }
     }
 }

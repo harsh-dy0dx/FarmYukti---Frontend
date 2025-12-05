@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.farmyukti"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.farmyukti"
@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
     implementation(libs.generativeai)
+    implementation(libs.androidx.compose.runtime)
     //implementation(libs.firebase.storage)
 
     testImplementation(libs.junit)
@@ -85,4 +86,14 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+
+    // Retrofit for networking
+   // implementation("com.squareup.retrofit2:retrofit:2.9.0")
+// Gson Converter for JSON parsing
+  //  implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+// Kotlin Coroutines for asynchronous operations
+  //  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+// ViewModel and LiveData (or State/Flow) for managing UI data
+   // implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
 }

@@ -69,3 +69,36 @@ data class MandiRootResponse(
     @SerializedName("records")
     val records: List<MandiPriceRecord>
 )
+
+
+////weather
+data class WeatherResponse(
+    val location: Location,
+    val current: Current
+)
+
+data class Location(
+    val name: String,
+    val region: String,
+    val country: String,
+    val localtime: String
+)
+
+data class Current(
+    @SerializedName("temp_c")
+    val tempC: Double,
+    val condition: Condition,
+    val humidity: Int,
+    @SerializedName("wind_kph")
+    val windKph: Double,
+    @SerializedName("feelslike_c")
+    val feelslikeC: Double,
+    @SerializedName("precip_mm")
+    val precipMm: Double
+    // Include other fields as needed
+)
+
+data class Condition(
+    val text: String,
+    val icon: String // This is the URL path for the weather icon
+)

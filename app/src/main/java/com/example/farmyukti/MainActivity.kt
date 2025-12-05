@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.ComposeFoundationFlags
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
@@ -39,6 +41,7 @@ fun FarmyuktiTheme(content: @Composable () -> Unit) {
 }
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
@@ -47,6 +50,7 @@ class MainActivity : ComponentActivity() {
             MediaManager.init(this, config)
         } catch (e: Exception) { }
 
+        ComposeFoundationFlags.isNonComposedClickableEnabled = true
         setContent {
             FarmyuktiTheme {
                 FarmYuktiApp()

@@ -22,3 +22,16 @@ object RetrofitClient {
         retrofit.create(MandiApiService::class.java)
     }
 }
+
+// Singleton object to provide the Retrofit instance
+object RetrofitClientWeather {
+    private const val BASE_URL = "https://api.weatherapi.com/"
+
+    val weatherService: WeatherApiService by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(WeatherApiService::class.java)
+    }
+}
