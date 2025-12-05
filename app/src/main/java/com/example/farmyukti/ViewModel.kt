@@ -36,6 +36,7 @@ sealed class VerificationState {
 class AppViewModel : ViewModel() {
     private val auth: FirebaseAuth = Firebase.auth
     private val db: FirebaseFirestore = Firebase.firestore
+    val currentUserId: String? get() = auth.currentUser?.uid
 
     private val _userRole = MutableStateFlow<UserRole?>(null)
     val userRole: StateFlow<UserRole?> = _userRole.asStateFlow()

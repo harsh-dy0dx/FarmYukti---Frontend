@@ -27,7 +27,7 @@ import androidx.navigation.NavController
 class MandiViewModel : ViewModel() {
 
     // ⚠️ IMPORTANT: Replace this with your actual API Key from data.gov.in
-    private val OGD_API_KEY = "579b464db66ec23bdd0000011fab503e1489428a7c08704ad0f52ab2"
+    private val OGD_API_KEY = "579b464db66ec23bdd000001a96a53bb28f74a446f081aac57df6102"
 
     // StateFlow to hold the data, making it observable by Compose UI
     private val _mandiRecords = MutableStateFlow<List<MandiPriceRecord>>(emptyList())
@@ -62,11 +62,11 @@ class MandiViewModel : ViewModel() {
 
                 // Update the state with the successfully fetched records
                 _mandiRecords.value = response.records
-                Log.d("shivam","${_mandiRecords}")
+
 
             } catch (e: Exception) {
                 // Log and handle the error (e.g., show a message to the user)
-                Log.d("shivam++","${_mandiRecords} and ${e.message}")
+
                 println("Network Error: Failed to fetch Mandi data. ${e.message}")
             } finally {
                 _isLoading.value = false // Set loading state to false

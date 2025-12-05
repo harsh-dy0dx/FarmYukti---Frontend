@@ -106,14 +106,6 @@ fun FavoritesScreen(navController: NavController, appViewModel: AppViewModel) {
     }
 }
 
-//@OptIn(ExperimentalMaterial3Api::class)
-//@Composable
-//fun MandiScreen(navController: NavController) {
-//    Scaffold(topBar = { TopAppBar(title = { Text("Mandi Prices") }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }) }) { padding ->
-//        Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { Text("Live Mandi Prices coming soon...") }
-//        MandiScreen(navController)
-//    }
-//}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

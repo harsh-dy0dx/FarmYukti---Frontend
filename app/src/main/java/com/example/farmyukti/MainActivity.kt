@@ -13,9 +13,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.cloudinary.android.MediaManager
 import com.example.farmyukti.repo.MandiScreen
 import com.example.farmyukti.repo.MandiViewModel
@@ -51,8 +53,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FarmyuktiTheme {
-               FarmYuktiApp()
-                //MandiScreen(navController = rememberNavController())
+                FarmYuktiApp()
+
             }
         }
     }
@@ -87,6 +89,15 @@ fun FarmYuktiApp(appViewModel: AppViewModel = viewModel()) {
             if (listingId != null) {
                 val listing = appViewModel.getListingById(listingId)
                 if (listing != null) ListingDetailScreen(navController, listing, appViewModel)
+            }
+        }
+        composable(
+            route = "listing_detail/{listingId}",
+            arguments = listOf(navArgument("listingId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId")
+            if (listingId != null) {
+                ListingDetailScreen(navController, appViewModel, listingId)
             }
         }
         composable(Screen.Profile.route) { ProfileScreen(navController, appViewModel) }
