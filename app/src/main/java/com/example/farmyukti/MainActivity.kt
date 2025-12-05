@@ -1,5 +1,6 @@
 package com.example.farmyukti
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -50,7 +51,6 @@ class MainActivity : ComponentActivity() {
             MediaManager.init(this, config)
         } catch (e: Exception) { }
 
-        ComposeFoundationFlags.isNonComposedClickableEnabled = true
         setContent {
             FarmyuktiTheme {
                 FarmYuktiApp()
@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@SuppressLint("ViewModelConstructorInComposable")
 @Composable
 fun FarmYuktiApp(appViewModel: AppViewModel = viewModel()) {
     val navController = rememberNavController()
