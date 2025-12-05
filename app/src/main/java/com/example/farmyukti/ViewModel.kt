@@ -8,6 +8,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import com.cloudinary.android.callback.UploadCallback
 import com.example.farmyukti.model.WeatherResponse
 import com.example.farmyukti.repo.RetrofitClientWeather
@@ -38,6 +43,12 @@ sealed class AuthUiState {
     object SignUpSuccess : AuthUiState()
     data class Error(val message: String?) : AuthUiState()
 }
+sealed class ImageUploadState {
+    object Idle : ImageUploadState()
+    object Loading : ImageUploadState()
+    object Success : ImageUploadState()
+    data class Error(val message: String) : ImageUploadState()
+}
 
 sealed class VerificationState {
     object Idle : VerificationState()
@@ -53,6 +64,9 @@ class AppViewModel : ViewModel() {
 
     private val _userRole = MutableStateFlow<UserRole?>(null)
     val userRole: StateFlow<UserRole?> = _userRole.asStateFlow()
+
+    private val _imageUploadStatus = MutableStateFlow<ImageUploadState>(ImageUploadState.Idle)
+    val imageUploadStatus: StateFlow<ImageUploadState> = _imageUploadStatus
 
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
@@ -86,6 +100,54 @@ class AppViewModel : ViewModel() {
                 _userProfile.value = null
             }
         }
+    }
+
+    fun uploadProfileImage(context: Context, uri: Uri) {
+        val uid = auth.currentUser?.uid ?: return
+        _imageUploadStatus.value = ImageUploadState.Loading
+
+        MediaManager.get().upload(uri)
+            .unsigned("farmyukti_preset")
+            .callback(object : UploadCallback {
+                override fun onStart(requestId: String) {}
+
+                override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
+
+                override fun onSuccess(requestId: String, resultData: Map<*, *>) {
+                    // 1. Safety Fix: Prevent crash if key is missing or null
+                    val downloadUrl = resultData["secure_url"] as? String
+
+                    if (downloadUrl == null) {
+                        _imageUploadStatus.value = ImageUploadState.Error("Upload failed: No URL returned")
+                        return
+                    }
+
+                    // 2. Threading Fix: Toasts MUST run on the Main Thread
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(context, "Image uploaded successfully", Toast.LENGTH_SHORT).show()
+                    }
+
+                    // 3. Database Update
+                    db.collection("users").document(uid)
+                        .update("photoUrl", downloadUrl)
+                        .addOnSuccessListener {
+                            // 4. The "Reflect Back" Fix:
+                            // This pulls the new data from DB, updating the variable your UI observes
+                            fetchUserData(uid)
+                            _imageUploadStatus.value = ImageUploadState.Success
+                        }
+                        .addOnFailureListener { e ->
+                            _imageUploadStatus.value = ImageUploadState.Error("Firestore update failed: ${e.message}")
+                        }
+                }
+
+                override fun onError(requestId: String, error: ErrorInfo) {
+                    _imageUploadStatus.value = ImageUploadState.Error(error.description)
+                }
+
+                override fun onReschedule(requestId: String, error: ErrorInfo) {}
+            })
+            .dispatch()
     }
 
     fun fetchUserData(uid: String) {

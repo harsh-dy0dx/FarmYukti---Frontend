@@ -46,6 +46,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.farmyukti.repo.safeClickable
 import java.io.File
 import java.io.FileOutputStream
@@ -87,6 +88,16 @@ fun ProfileScreen(navController: NavController, appViewModel: AppViewModel) {
     var agriStackId by remember { mutableStateOf(userProfile?.agriStackId ?: "") }
     val context = LocalContext.current
 
+    val singlePhotoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                // Pass 'context' here!
+                appViewModel.uploadProfileImage(context, uri)
+            }
+        }
+    )
+
     Scaffold(
         containerColor = Color(0xFFF9FAFB), // Soft modern background
         topBar = {
@@ -109,18 +120,41 @@ fun ProfileScreen(navController: NavController, appViewModel: AppViewModel) {
                 modifier = Modifier.padding(vertical = 24.dp)
             ) {
                 Surface(
-                    modifier = Modifier.size(120.dp),
+                    modifier = Modifier.size(120.dp)
+                    .safeClickable{
+                    singlePhotoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primaryContainer,
                     border = BorderStroke(4.dp, Color.White),
                     shadowElevation = 4.dp
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = "Profile",
-                        modifier = Modifier.padding(16.dp).fillMaxSize(),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    if (userProfile?.photoUrl.isNullOrEmpty()) {
+                        // Fallback Icon
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Default Profile",
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxSize(),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        // Actual Image from Cloudinary
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(userProfile?.photoUrl)
+                                .crossfade(true)
+                                // Optional: Add a memory cache key to force refresh if URL is same
+                                // .memoryCacheKey(userProfile?.photoUrl + System.currentTimeMillis())
+                                .build(),
+                            contentDescription = "Profile Photo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
                 // Role Badge
                 Surface(
