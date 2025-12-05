@@ -56,7 +56,8 @@ data class ProduceListing(
     val location: String = "",
     val description: String = "",
     val rating: String = "4.5",
-    val imageUrl: String = ""
+    val imageUrl: String = "",
+    val imageUrls: List<String> = emptyList()
 )
 
 data class Advisory(val id: String, val title: String, val type: AdvisoryType, val summary: String, val date: String)

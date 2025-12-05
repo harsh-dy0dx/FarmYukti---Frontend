@@ -11,11 +11,15 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 sealed class AuthUiState {
     object Idle : AuthUiState()
@@ -216,30 +220,135 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    fun createListing(listing: ProduceListing, imageUri: Uri?, onComplete: () -> Unit) {
+//    fun createListing(listing: ProduceListing, imageUri: Uri?, onComplete: () -> Unit) {
+//        viewModelScope.launch {
+//            _authUiState.value = AuthUiState.Loading
+//            val user = auth.currentUser
+//            if (user != null) {
+//                if (imageUri != null) {
+//                    MediaManager.get().upload(imageUri).unsigned("farmyukti_preset").callback(object : UploadCallback {
+//                        override fun onStart(requestId: String) {}
+//                        override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
+//                        override fun onSuccess(requestId: String, resultData: Map<*, *>) {
+//                            val imageUrl = resultData["secure_url"] as String
+//                            saveListingToFirestore(listing, imageUrl, user.uid, onComplete)
+//                        }
+//                        override fun onError(requestId: String, error: ErrorInfo) {
+//                            _authUiState.value = AuthUiState.Error("Upload failed")
+//                        }
+//                        override fun onReschedule(requestId: String, error: ErrorInfo) {}
+//                    }).dispatch()
+//                } else {
+//                    saveListingToFirestore(listing, "", user.uid, onComplete)
+//                }
+//            }
+//        }
+//    }
+
+
+    fun createListing(listing: ProduceListing, imageUris: List<Uri>, onComplete: () -> Unit) {
         viewModelScope.launch {
             _authUiState.value = AuthUiState.Loading
             val user = auth.currentUser
+
             if (user != null) {
-                if (imageUri != null) {
-                    MediaManager.get().upload(imageUri).unsigned("farmyukti_preset").callback(object : UploadCallback {
-                        override fun onStart(requestId: String) {}
-                        override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
-                        override fun onSuccess(requestId: String, resultData: Map<*, *>) {
-                            val imageUrl = resultData["secure_url"] as String
-                            saveListingToFirestore(listing, imageUrl, user.uid, onComplete)
-                        }
-                        override fun onError(requestId: String, error: ErrorInfo) {
-                            _authUiState.value = AuthUiState.Error("Upload failed")
-                        }
-                        override fun onReschedule(requestId: String, error: ErrorInfo) {}
-                    }).dispatch()
+                if (imageUris.isNotEmpty()) {
+                    try {
+                        // Upload all images and wait for the results
+                        val uploadedUrls = uploadAllImages(imageUris)
+
+                        // Once all images are uploaded, save to Firestore
+                        saveListingToFirestore(listing, uploadedUrls, user.uid, onComplete)
+
+                    } catch (e: Exception) {
+                        _authUiState.value = AuthUiState.Error("Image upload failed: ${e.message}")
+                    }
                 } else {
-                    saveListingToFirestore(listing, "", user.uid, onComplete)
+                    // No images selected, save with empty list
+                    saveListingToFirestore(listing, emptyList(), user.uid, onComplete)
                 }
             }
         }
     }
+
+
+
+
+    // 2. Helper function to upload multiple images and return their URLs
+    private suspend fun uploadAllImages(uris: List<Uri>): List<String> = withContext(Dispatchers.IO) {
+        val uploadedUrls = mutableListOf<String>()
+
+        // We use 'map' + 'awaitAll' pattern (or simple loop with suspendCoroutine) to handle async uploads
+        // Here is a simple approach using suspendCancellableCoroutine for Cloudinary callback
+        uris.forEach { uri ->
+            val url = uploadSingleImage(uri)
+            if (url != null) {
+                uploadedUrls.add(url)
+            }
+        }
+        return@withContext uploadedUrls
+    }
+
+    // 3. Helper to wrap the Cloudinary callback in a coroutine
+    private suspend fun uploadSingleImage(uri: Uri): String? = suspendCancellableCoroutine { continuation ->
+        MediaManager.get().upload(uri).unsigned("farmyukti_preset").callback(object : UploadCallback {
+            override fun onStart(requestId: String) {}
+            override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
+
+            override fun onSuccess(requestId: String, resultData: Map<*, *>) {
+                val imageUrl = resultData["secure_url"] as? String
+                if (continuation.isActive) {
+                    continuation.resume(imageUrl)
+                }
+            }
+
+            override fun onError(requestId: String, error: ErrorInfo) {
+                // Log error or handle it. For now, we resume with null to skip this image
+                if (continuation.isActive) {
+                    continuation.resume(null)
+                }
+            }
+
+            override fun onReschedule(requestId: String, error: ErrorInfo) {}
+        }).dispatch()
+    }
+
+
+
+
+    // 4. Update Firestore save function to handle List<String>
+    private fun saveListingToFirestore(listing: ProduceListing, imageUrls: List<String>, uid: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val newDocRef = db.collection("listings").document()
+                val profile = _userProfile.value
+
+                val newListing = listing.copy(
+                    farmerId = uid,
+                    id = newDocRef.id,
+                    // Save the LIST of URLs
+                    imageUrls = imageUrls,
+                    // You can keep a main 'imageUrl' for backward compatibility (using the first one)
+                    imageUrl = imageUrls.firstOrNull() ?: "",
+
+                    farmerName = profile?.name ?: "Farmer",
+                    contactNumber = if(listing.contactNumber.isNotEmpty()) listing.contactNumber else profile?.mobile ?: ""
+                )
+
+                newDocRef.set(newListing).await()
+                fetchListings()
+                _authUiState.value = AuthUiState.Idle
+                onComplete()
+            } catch (e: Exception) {
+                _authUiState.value = AuthUiState.Error("Save failed: ${e.message}")
+            }
+        }
+    }
+    //*********************************************************************
+
+
+
+
 
     private fun saveListingToFirestore(listing: ProduceListing, imageUrl: String, uid: String, onComplete: () -> Unit) {
         viewModelScope.launch {
