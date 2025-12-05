@@ -132,7 +132,7 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
             Button(onClick = {
                 if(produceName.isNotEmpty() && price.isNotEmpty()) {
                     val newListing = ProduceListing(produceName = produceName, farmerName = farmerName, quantityKg = quantity, basePricePerKg = price, location = location, contactNumber = contactNumber, aiQualityGrade = selectedQuality, description = description)
-                    appViewModel.createListing(newListing, imageUri) { Toast.makeText(context, "Listing Created!", Toast.LENGTH_SHORT).show(); navController.popBackStack() }
+                    appViewModel.createListing(newListing, imageUri as List<Uri>) { Toast.makeText(context, "Listing Created!", Toast.LENGTH_SHORT).show(); navController.popBackStack() }
                 } else Toast.makeText(context, "Fill required fields", Toast.LENGTH_SHORT).show()
             }, modifier = Modifier.fillMaxWidth().height(50.dp), enabled = !isLoading) { if (isLoading) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary) else Text("Create Listing") }
             Spacer(Modifier.height(24.dp))
