@@ -9,9 +9,6 @@ import retrofit2.http.Query
 
 private const val RESOURCE_ID = "9ef84268-d588-465a-a308-a864a43d0070"
 interface MandiApiService {
-
-    // The OGD resource ID is used as the endpoint path
-    // private const val RESOURCE_ID = "9ef84268-d588-465a-a308-a864a43d0070"
     @GET("resource/$RESOURCE_ID")
     suspend fun getMandiPrices(
         // Required for OGD access

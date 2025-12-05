@@ -3,8 +3,6 @@ package com.example.farmyukti.repo
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-class retrofitClient {
-}
 object RetrofitClient {
     // The OGD Base URL for data access
     private const val BASE_URL = "https://api.data.gov.in/"

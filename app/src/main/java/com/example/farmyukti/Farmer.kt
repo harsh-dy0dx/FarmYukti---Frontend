@@ -99,61 +99,6 @@ fun FarmerHomeScreen(navController: NavController, appViewModel: AppViewModel) {
         }
     }
 }
-//
-//@OptIn(ExperimentalMaterial3Api::class)
-//@Composable
-//fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel) {
-//    var produceName by rememberSaveable { mutableStateOf("") }
-//    var quantity by rememberSaveable { mutableStateOf("") }
-//    var price by rememberSaveable { mutableStateOf("") }
-//    var location by rememberSaveable { mutableStateOf("") }
-//    var contactNumber by rememberSaveable { mutableStateOf("") }
-//    var description by rememberSaveable { mutableStateOf("") }
-//    var farmerName by rememberSaveable { mutableStateOf("") }
-//    var imageUri by remember { mutableStateOf<Uri?>(null) }
-//    var expanded by remember { mutableStateOf(false) }
-//    val qualityOptions = listOf("Grade A", "Grade B", "Grade C")
-//    var selectedQuality by remember { mutableStateOf(qualityOptions[0]) }
-//    val authUiState by appViewModel.authUiState.collectAsState()
-//    val isLoading = authUiState is AuthUiState.Loading
-//    val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? -> imageUri = uri }
-//    val context = LocalContext.current
-//
-//    Scaffold(topBar = { TopAppBar(title = { Text("Create New Listing") }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }) }) { padding ->
-//        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-//            Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(Color(0xFFEEEEEE), RoundedCornerShape(12.dp)).clickable { launcher.launch("image/*") }, contentAlignment = Alignment.Center) {
-//                if (imageUri != null) Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.CheckCircle, "Selected", modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary); Text("Image Selected", color = MaterialTheme.colorScheme.primary) }
-//                else Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.Image, "Upload", modifier = Modifier.size(48.dp), tint = Color.Gray); Text("Tap to upload Crop Photo", color = Color.Gray) }
-//            }
-//            OutlinedTextField(value = produceName, onValueChange = { produceName = it }, label = { Text("Crop Name") }, modifier = Modifier.fillMaxWidth())
-//            OutlinedTextField(value = farmerName, onValueChange = { farmerName = it }, label = { Text("Your Name") }, modifier = Modifier.fillMaxWidth())
-//            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-//                OutlinedTextField(value = quantity, onValueChange = { quantity = it }, label = { Text("Quantity (kg)") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-//                OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Price/kg") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-//            }
-//            OutlinedTextField(value = location, onValueChange = { location = it }, label = { Text("Location") }, modifier = Modifier.fillMaxWidth())
-//            OutlinedTextField(value = contactNumber, onValueChange = { contactNumber = it }, label = { Text("WhatsApp Number") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
-//            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
-//                OutlinedTextField(modifier = Modifier.menuAnchor().fillMaxWidth(), readOnly = true, value = selectedQuality, onValueChange = {}, label = { Text("Quality Grade") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) })
-//                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-//                    qualityOptions.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { selectedQuality = option; expanded = false }) }
-//                }
-//            }
-//            OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-//            Button(onClick = {
-//                if(produceName.isNotEmpty() && price.isNotEmpty()) {
-//                    val newListing = ProduceListing(produceName = produceName, farmerName = farmerName, quantityKg = quantity, basePricePerKg = price, location = location, contactNumber = contactNumber, aiQualityGrade = selectedQuality, description = description)
-//                    appViewModel.createListing(newListing, imageUri) { Toast.makeText(context, "Listing Created!", Toast.LENGTH_SHORT).show(); navController.popBackStack() }
-//                } else Toast.makeText(context, "Fill required fields", Toast.LENGTH_SHORT).show()
-//            }, modifier = Modifier.fillMaxWidth().height(50.dp), enabled = !isLoading) { if (isLoading) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary) else Text("Create Listing") }
-//            Spacer(Modifier.height(24.dp))
-//        }
-//    }
-//}
-
-
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -180,8 +125,6 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
     val isLoading = authUiState is AuthUiState.Loading
 
     // --- Launchers ---
-
-    // 1. Gallery Launcher (Select Multiple)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(3)
     ) { uris ->
@@ -192,12 +135,10 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
         }
     }
 
-    // 2. Camera Launcher (Capture & Convert to URI)
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
         if (bitmap != null && imageUris.size < 3) {
-            // Helper function to save bitmap as a temp file and get URI
             val uri = writeBitmapToTempFile(context, bitmap)
             imageUris.add(uri)
         }
@@ -224,10 +165,9 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // --- NEW: Image Selection Section ---
+            // --- Image Selection Section ---
             Text("Crop Photos (Max 3)", style = MaterialTheme.typography.labelLarge)
 
-            // Buttons Row
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Button(
                     onClick = { cameraLauncher.launch(null) },
@@ -259,7 +199,6 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
                 }
             }
 
-            // Selected Images Preview Row
             if (imageUris.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -278,7 +217,6 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
-                            // Remove Button
                             IconButton(
                                 onClick = { imageUris.removeAt(index) },
                                 modifier = Modifier
@@ -292,7 +230,6 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
                     }
                 }
             } else {
-                // Empty State Placeholder
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -307,28 +244,21 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
 
             // --- Form Fields ---
             OutlinedTextField(value = produceName, onValueChange = { produceName = it }, label = { Text("Crop Name") }, modifier = Modifier.fillMaxWidth())
-
             OutlinedTextField(value = farmerName, onValueChange = { farmerName = it }, label = { Text("Your Name") }, modifier = Modifier.fillMaxWidth())
-
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(value = quantity, onValueChange = { quantity = it }, label = { Text("Quantity (kg)") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Price/kg") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
             }
-
             OutlinedTextField(value = location, onValueChange = { location = it }, label = { Text("Location") }, modifier = Modifier.fillMaxWidth())
-
             OutlinedTextField(value = contactNumber, onValueChange = { contactNumber = it }, label = { Text("WhatsApp Number") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
-
             ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(modifier = Modifier.menuAnchor().fillMaxWidth(), readOnly = true, value = selectedQuality, onValueChange = {}, label = { Text("Quality Grade") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) })
                 ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     qualityOptions.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { selectedQuality = option; expanded = false }) }
                 }
             }
-
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
 
-            // --- Create Button ---
             Button(
                 onClick = {
                     if (produceName.isNotEmpty() && price.isNotEmpty()) {
@@ -342,7 +272,6 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
                             aiQualityGrade = selectedQuality,
                             description = description
                         )
-                        // CHANGED: Passing the List<Uri> (imageUris) to the ViewModel
                         appViewModel.createListing(newListing, imageUris) {
                             Toast.makeText(context, "Listing Created!", Toast.LENGTH_SHORT).show()
                             navController.popBackStack()
@@ -356,13 +285,11 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
             ) {
                 if (isLoading) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary) else Text("Create Listing")
             }
-
             Spacer(Modifier.height(24.dp))
         }
     }
 }
 
-// --- Helper Function to convert Bitmap to Uri ---
 private fun writeBitmapToTempFile(context: Context, bitmap: Bitmap): Uri {
     val file = File(context.cacheDir, "capture_${System.currentTimeMillis()}.jpg")
     file.createNewFile()
@@ -372,34 +299,90 @@ private fun writeBitmapToTempFile(context: Context, bitmap: Bitmap): Uri {
     return Uri.fromFile(file)
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// --- UPDATED FARMER LISTINGS SCREEN WITH TABS ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewModel) {
     val listings by appViewModel.listings.collectAsState()
-    Scaffold(topBar = { TopAppBar(title = { Text("My Produce Listings") }) }, floatingActionButton = {
-        Button(onClick = { navController.navigate(Screen.CreateListing.route) }, shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.Add, "Add", modifier = Modifier.padding(end = 8.dp)); Text("New Listing") }
-    }) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            items(listings) { listing -> ProduceListItem(listing = listing, onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) }, onDelete = { appViewModel.deleteListing(listing.id) }) }
+    val userProfile by appViewModel.userProfile.collectAsState()
+    val currentUserId = userProfile?.uid ?: ""
+
+    // 0 = My Produce, 1 = Market Listings
+    var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
+    val tabs = listOf("My Produce", "Market Listings")
+
+    Scaffold(
+        topBar = {
+            Column {
+                TopAppBar(title = { Text("Produce Listings") })
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = { Text(title) }
+                        )
+                    }
+                }
+            }
+        },
+        floatingActionButton = {
+            // Only show "New Listing" button if on "My Produce" tab (Optional UX choice, kept generic here)
+            Button(onClick = { navController.navigate(Screen.CreateListing.route) }, shape = RoundedCornerShape(16.dp)) {
+                Icon(Icons.Default.Add, "Add", modifier = Modifier.padding(end = 8.dp))
+                Text("New Listing")
+            }
+        }
+    ) { padding ->
+
+        // Filter Logic
+        val filteredListings = if (selectedTabIndex == 0) {
+            // My Produce: Show only my listings
+            listings.filter { it.farmerId == currentUserId }
+        } else {
+            // Market Listings: Show everything EXCEPT my listings (or show all if you prefer)
+            listings.filter { it.farmerId != currentUserId }
+        }
+
+        if (filteredListings.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (selectedTabIndex == 0) "You haven't added any produce yet." else "No market listings available.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.Gray
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(filteredListings) { listing ->
+                    ProduceListItem(
+                        listing = listing,
+                        onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) },
+                        // Only allow deletion if we are in "My Produce" tab
+                        onDelete = if (selectedTabIndex == 0) {
+                            { appViewModel.deleteListing(listing.id) }
+                        } else {
+                            // Pass empty lambda or logic to hide delete button in your ProduceListItem
+                            {}
+                        }
+                    )
+                }
+            }
         }
     }
 }
