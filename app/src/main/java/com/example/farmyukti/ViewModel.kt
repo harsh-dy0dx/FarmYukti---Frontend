@@ -221,30 +221,6 @@ class AppViewModel : ViewModel() {
         }
     }
 
-//    fun createListing(listing: ProduceListing, imageUri: Uri?, onComplete: () -> Unit) {
-//        viewModelScope.launch {
-//            _authUiState.value = AuthUiState.Loading
-//            val user = auth.currentUser
-//            if (user != null) {
-//                if (imageUri != null) {
-//                    MediaManager.get().upload(imageUri).unsigned("farmyukti_preset").callback(object : UploadCallback {
-//                        override fun onStart(requestId: String) {}
-//                        override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
-//                        override fun onSuccess(requestId: String, resultData: Map<*, *>) {
-//                            val imageUrl = resultData["secure_url"] as String
-//                            saveListingToFirestore(listing, imageUrl, user.uid, onComplete)
-//                        }
-//                        override fun onError(requestId: String, error: ErrorInfo) {
-//                            _authUiState.value = AuthUiState.Error("Upload failed")
-//                        }
-//                        override fun onReschedule(requestId: String, error: ErrorInfo) {}
-//                    }).dispatch()
-//                } else {
-//                    saveListingToFirestore(listing, "", user.uid, onComplete)
-//                }
-//            }
-//        }
-//    }
 
 
     fun createListing(listing: ProduceListing, imageUris: List<Uri>, onComplete: () -> Unit) {
@@ -345,7 +321,7 @@ class AppViewModel : ViewModel() {
             }
         }
     }
-    //*********************************************************************
+
 
 
 

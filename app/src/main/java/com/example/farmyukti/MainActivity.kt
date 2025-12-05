@@ -4,14 +4,10 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -81,23 +77,14 @@ fun FarmYuktiApp(appViewModel: AppViewModel = viewModel()) {
         composable(Screen.SignUp.route) { SignUpScreen(navController, appViewModel) }
         composable(Screen.FarmerMain.route) { FarmerMainScreen(navController, appViewModel) }
         composable(Screen.CreateListing.route) { CreateListingScreen(navController, appViewModel) }
-        composable(Screen.FarmerNegotiation.route) { backStackEntry -> NegotiationScreen(navController, backStackEntry.arguments?.getString("listingId") ?: "default", UserRole.FARMER) }
+        //composable(Screen.FarmerNegotiation.route) { backStackEntry -> NegotiationScreen(navController, backStackEntry.arguments?.getString("listingId") ?: "default", UserRole.FARMER) }
         composable(Screen.BuyerMain.route) { BuyerMainScreen(navController, appViewModel) }
-        composable(Screen.BuyerNegotiation.route) { backStackEntry -> NegotiationScreen(navController, backStackEntry.arguments?.getString("listingId") ?: "default", UserRole.BUYER) }
+        //composable(Screen.BuyerNegotiation.route) { backStackEntry -> NegotiationScreen(navController, backStackEntry.arguments?.getString("listingId") ?: "default", UserRole.BUYER) }
         composable(Screen.ListingDetail.route) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId")
             if (listingId != null) {
                 val listing = appViewModel.getListingById(listingId)
                 if (listing != null) ListingDetailScreen(navController, listing, appViewModel)
-            }
-        }
-        composable(
-            route = "listing_detail/{listingId}",
-            arguments = listOf(navArgument("listingId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val listingId = backStackEntry.arguments?.getString("listingId")
-            if (listingId != null) {
-                ListingDetailScreen(navController, appViewModel, listingId)
             }
         }
         composable(Screen.Profile.route) { ProfileScreen(navController, appViewModel) }
