@@ -601,6 +601,12 @@ fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewMode
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     val tabs = listOf("My Produce", "Market Listings")
 
+    // Filter States
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("All") }
+    var selectedGrade by remember { mutableStateOf("All") }
+    var selectedLocation by remember { mutableStateOf("All") }
+
     Scaffold(
         topBar = {
             Column {
@@ -630,49 +636,86 @@ fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewMode
             }
         }
     ) { padding ->
-
-        // Filter Logic
-        val filteredListings = if (selectedTabIndex == 0) {
-            // My Produce: Show only my listings
-            listings.filter { it.farmerId == currentUserId }
-        } else {
-            // Market Listings: Show everything EXCEPT my listings
-            listings.filter { it.farmerId != currentUserId }
+        // 1. Prepare Base List
+        val baseList = remember(listings, selectedTabIndex, currentUserId) {
+            if (selectedTabIndex == 0) listings.filter { it.farmerId == currentUserId }
+            else listings.filter { it.farmerId != currentUserId }
         }
 
-        if (filteredListings.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (selectedTabIndex == 0) "You haven't added any produce yet." else "No market listings available.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.Gray
-                )
-            }
-        } else {
+        // 2. Prepare Dropdown Options
+        val availableCategories = remember(baseList) { appViewModel.getUniqueCategories(baseList) }
+        val availableLocations = remember(baseList) { appViewModel.getUniqueLocations(baseList) }
+        val availableGrades = listOf("All", "Grade A", "Grade B", "Grade C")
+
+        // 3. Filter Logic
+        val finalFilteredList = remember(baseList, searchQuery, selectedCategory, selectedGrade, selectedLocation) {
+            appViewModel.filterListings(
+                originalList = baseList,
+                query = searchQuery,
+                category = if (selectedCategory == "All") null else selectedCategory,
+                grade = if (selectedGrade == "All") null else selectedGrade,
+                location = if (selectedLocation == "All") null else selectedLocation
+            )
+        }
+
+        // *** FIX: Wrapped in Column so Search and List don't overlap ***
+        Column(
+            modifier = Modifier
+                .padding(padding) // Apply scaffold padding here
+                .fillMaxSize()
+        ) {
+
+            // Search Bar Component
+            SearchAndFilterSection(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                categories = availableCategories,
+                selectedCategory = selectedCategory,
+                onCategoryChange = { selectedCategory = it },
+                grades = availableGrades,
+                selectedGrade = selectedGrade,
+                onGradeChange = { selectedGrade = it },
+                locations = availableLocations,
+                selectedLocation = selectedLocation,
+                onLocationChange = { selectedLocation = it }
+            )
+
+            // Listings List
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                    .fillMaxWidth()
+                    .weight(1f) // Takes up remaining space after SearchBar
+                    .background(Color(0xFFF5F5F5)),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(filteredListings) { listing ->
-                    ProduceListItem(
-                        listing = listing,
-                        onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) },
-                        // Only allow deletion if we are in "My Produce" tab
-                        onDelete = if (selectedTabIndex == 0) {
-                            { appViewModel.deleteListing(listing.id) }
-                        } else {
-                            // Pass empty lambda to hide delete button
-                            {}
+                if (finalFilteredList.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(400.dp), // Give it some height to center vertically
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "No matches found" else "No listings available",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
                         }
-                    )
+                    }
+                } else {
+                    items(finalFilteredList) { listing ->
+                        ProduceListItem(
+                            listing = listing,
+                            onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) },
+                            onDelete = if (selectedTabIndex == 0) {
+                                { appViewModel.deleteListing(listing.id) }
+                            } else {
+                                {}
+                            }
+                        )
+                    }
                 }
             }
         }

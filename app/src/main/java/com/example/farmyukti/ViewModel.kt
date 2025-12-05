@@ -88,6 +88,49 @@ class AppViewModel : ViewModel() {
         fetchListings()
     }
 
+    // --- Search & Filter Logic ---
+    // In AppViewModel.kt -> replace the existing filterListings function with this:
+
+    fun filterListings(
+        originalList: List<ProduceListing>,
+        query: String,
+        category: String?,
+        grade: String?,
+        location: String?
+    ): List<ProduceListing> {
+        return originalList.filter { item ->
+            // 1. Search Query
+            val matchesSearch = if (query.isBlank()) true else {
+                item.produceName.contains(query, ignoreCase = true) ||
+                        item.farmerName.contains(query, ignoreCase = true)
+            }
+
+            // 2. Category Filter (CHANGED TO CONTAINS)
+            val matchesCategory = if (category.isNullOrBlank() || category == "All") true else {
+                item.produceName.contains(category, ignoreCase = true) // <--- Fixed here
+            }
+
+            // 3. Grade Filter
+            val matchesGrade = if (grade.isNullOrBlank() || grade == "All") true else {
+                item.aiQualityGrade.equals(grade, ignoreCase = true)
+            }
+
+            // 4. Location Filter
+            val matchesLocation = if (location.isNullOrBlank() || location == "All") true else {
+                item.location.contains(location, ignoreCase = true)
+            }
+
+            matchesSearch && matchesCategory && matchesGrade && matchesLocation
+        }
+    }
+
+    // Helper to get unique values for Dropdowns
+    fun getUniqueLocations(listings: List<ProduceListing>): List<String> =
+        listOf("All") + listings.map { it.location }.distinct().sorted()
+
+    fun getUniqueCategories(listings: List<ProduceListing>): List<String> =
+        listOf("All") + listings.map { it.produceName }.distinct().sorted()
+
     private fun checkCurrentUser() {
         viewModelScope.launch {
             _authUiState.value = AuthUiState.Loading

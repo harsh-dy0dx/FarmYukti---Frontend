@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.generativeai)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.material3)
     //implementation(libs.firebase.storage)
 
     testImplementation(libs.junit)
