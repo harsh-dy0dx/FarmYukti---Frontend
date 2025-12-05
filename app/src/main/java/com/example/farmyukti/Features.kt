@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -173,6 +174,7 @@ fun CropRecommendationScreen(
 }
 
 
+
 @Composable
 fun PlantDiagnosisScreen(
     navController: NavController,
@@ -184,28 +186,46 @@ fun PlantDiagnosisScreen(
     val scrollState = rememberScrollState()
 
     // --- State ---
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var promptText by remember { mutableStateOf("dont give any special charater in reply,  Identify this plant and diagnose any pest or disease issues visible. Provide organic and chemical control recommendations in Hindi language, also reply in formal way and short reply,dont give any special character just formal reply.") }
+    // Change 1: Use a list to hold multiple images instead of a single variable
+    val selectedImages = remember { mutableStateListOf<Bitmap>() }
+
+    var promptText by remember { mutableStateOf("in response, dont give any special character just formal reply, no any *(star symbol) or #(hash symbol),  Identify this plant and diagnose any pest or disease issues visible. Provide organic and chemical control recommendations in Hindi language, also reply in formal way and short reply.") }
     var responseText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // --- Image Picker Launcher ---
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            selectedImageUri = uri
-            responseText = ""
-            errorMessage = null
+    // --- Launchers ---
 
-            // Decode URI to Bitmap
-            try {
-                val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
-                selectedBitmap = BitmapFactory.decodeStream(inputStream)
-            } catch (e: Exception) {
-                errorMessage = "Failed to load image: ${e.localizedMessage}"
+    // 1. Gallery Launcher (Allows picking multiple items)
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(3) // Limit to 3
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            errorMessage = null
+            uris.forEach { uri ->
+                try {
+                    val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+                    val bitmap = BitmapFactory.decodeStream(inputStream)
+                    if (bitmap != null && selectedImages.size < 3) {
+                        selectedImages.add(bitmap)
+                    }
+                } catch (e: Exception) {
+                    errorMessage = "Failed to load some images."
+                }
+            }
+        }
+    }
+
+    // 2. Camera Launcher (Captures a thumbnail bitmap)
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            if (selectedImages.size < 3) {
+                selectedImages.add(bitmap)
+                errorMessage = null
+            } else {
+                errorMessage = "Maximum 3 images allowed."
             }
         }
     }
@@ -223,7 +243,8 @@ fun PlantDiagnosisScreen(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(bottom = 24.dp)
         ) {
-            Icon(imageVector = Icons.Rounded.Spa,
+            Icon(
+                imageVector = Icons.Rounded.Spa,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
@@ -237,73 +258,134 @@ fun PlantDiagnosisScreen(
             )
         }
 
-        // Image Selection Area
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(250.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.White)
-                .border(2.dp, Color(0xFFE0E0E0), RoundedCornerShape(16.dp))
-                .clickable {
-                    photoPickerLauncher.launch(
+        // --- Image Selection Control ---
+        Text(
+            text = "Upload Photos (Max 3)",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.align(Alignment.Start)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Buttons to Add Images
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // Button: Open Camera
+            OutlinedButton(
+                onClick = { cameraLauncher.launch(null) },
+                enabled = selectedImages.size < 3
+            ) {
+                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Camera")
+            }
+
+            // Button: Open Gallery
+            OutlinedButton(
+                onClick = {
+                    galleryLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 },
-            contentAlignment = Alignment.Center
-        ) {
-            if (selectedBitmap != null) {
-                Image(
-                    bitmap = selectedBitmap!!.asImageBitmap(),
-                    contentDescription = "Selected Plant",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                // 'Remove' Button
-                IconButton(
-                    onClick = {
-                        selectedImageUri = null
-                        selectedBitmap = null
-                        responseText = ""
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White)
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Upload",
-                        modifier = Modifier.size(48.dp),
-                        tint = Color.Gray
-                    )
-                    Text("Tap to upload plant photo", color = Color.Gray)
-                }
+                enabled = selectedImages.size < 3
+            ) {
+                Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Gallery")
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // --- The 3 Image Slots Display ---
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()), // Allow horizontal scrolling if needed
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Loop to create 3 boxes.
+            // If an image exists at that index, show it. If not, show a placeholder.
+            for (i in 0 until 3) {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp, 120.dp) // Fixed size for the boxes
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFF0F0F0))
+                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (i < selectedImages.size) {
+                        // Show the Image
+                        Image(
+                            bitmap = selectedImages[i].asImageBitmap(),
+                            contentDescription = "Selected Plant $i",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        // Remove Button (Small X in corner)
+                        IconButton(
+                            onClick = { selectedImages.removeAt(i) },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(24.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    } else {
+                        // Empty Slot Placeholder
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Image,
+                                contentDescription = null,
+                                tint = Color.Gray
+                            )
+                            Text(
+                                "Slot ${i + 1}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
-
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Action Button
         Button(
             onClick = {
-                if (selectedBitmap != null && !isLoading) {
+                if (selectedImages.isNotEmpty() && !isLoading) {
                     isLoading = true
                     errorMessage = null
                     responseText = ""
 
                     scope.launch {
                         try {
-                            val base64Image = bitmapToBase64(selectedBitmap!!)
-                            val result = callGeminiApi(promptText, base64Image)
+                            // Convert ALL bitmaps to a list of Base64 strings
+                            // Note: You might need to update your callGeminiApi to accept a List<String>
+                            // or loop through them here.
+
+                            // Example: Taking the first one for now, or combining them if your API supports it.
+                            // Ideally, send the list. Here is how you prepare the list:
+                            val base64ImagesList = selectedImages.map { bitmapToBase64(it) }
+
+                            // *** IMPORTANT: Update your callGeminiApi function to accept List<String> ***
+                            // For this example, I am passing the first one to avoid compile errors
+                            // if you haven't updated the helper function yet.
+                            // To fix: change your `callGeminiApi` signature.
+
+                            val result = callGeminiApi(promptText, base64ImagesList)
+
+
                             responseText = result
                             onAnalysisComplete?.invoke(result)
                         } catch (e: Exception) {
@@ -312,8 +394,8 @@ fun PlantDiagnosisScreen(
                             isLoading = false
                         }
                     }
-                } else if (selectedBitmap == null) {
-                    errorMessage = "Please upload an image first."
+                } else if (selectedImages.isEmpty()) {
+                    errorMessage = "Please upload at least one image."
                 }
             },
             modifier = Modifier
@@ -322,13 +404,13 @@ fun PlantDiagnosisScreen(
             enabled = !isLoading,
             shape = RoundedCornerShape(12.dp)
         ) {
-            if(isLoading) {
+            if (isLoading) {
                 CircularProgressIndicator(
                     color = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
             } else {
-                Text("Diagnose Plant")
+                Text("Diagnose Plant (${selectedImages.size} Images)")
             }
         }
 
@@ -359,20 +441,36 @@ fun PlantDiagnosisScreen(
 
             SelectionContainer {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Text(
                         text = responseText,
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.bodyMedium,
-                        lineHeight = 24.sp
+                        lineHeight = 24.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 18.sp
                     )
                 }
             }
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -397,13 +495,7 @@ fun FarmerAdvisoryScreen(navController: NavController) {
     }
 }
 
-// --- Helpers ---
-//@Composable
-//fun CompactInput(label: String, value: String, onValueChange: (String) -> Unit, modifier: Modifier) {
-//    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-//        Column(Modifier.padding(8.dp)) { Text(label, fontSize = 10.sp, color = Color.Gray); BasicTextField(value = value, onValueChange = onValueChange, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)) }
-//    }
-//}
+
 
 
 
@@ -440,26 +532,42 @@ private suspend fun bitmapToBase64(bitmap: Bitmap): String = withContext(Dispatc
     Base64.encodeToString(byteArray, Base64.NO_WRAP)
 }
 
-private suspend fun callGeminiApi(prompt: String, base64Image: String): String = withContext(Dispatchers.IO) {
+
+
+
+
+
+
+private suspend fun callGeminiApi(prompt: String, base64Images: List<String>): String = withContext(Dispatchers.IO) {
     if (GEMINI_API_KEY.isEmpty()) throw Exception("API Key is missing.")
 
-    val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=$GEMINI_API_KEY")
+    // Note: Verify this model version. Standard is usually "gemini-1.5-flash"
+    val modelName = "gemini-2.5-flash-preview-09-2025"
+    val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$GEMINI_API_KEY")
 
-    // Construct JSON Payload using standard org.json
+    // Construct JSON Payload
     val jsonBody = JSONObject().apply {
         put("contents", JSONArray().apply {
             put(JSONObject().apply {
-                put("parts", JSONArray().apply {
-                    // 1. Text Prompt
-                    put(JSONObject().put("text", prompt))
-                    // 2. Image Data
-                    put(JSONObject().apply {
+
+                // Create the array that will hold text + all images
+                val partsArray = JSONArray()
+
+                // 1. Add Text Prompt
+                partsArray.put(JSONObject().put("text", prompt))
+
+                // 2. Loop through the list and add EACH image as a separate part
+                base64Images.forEach { base64String ->
+                    partsArray.put(JSONObject().apply {
                         put("inlineData", JSONObject().apply {
                             put("mimeType", "image/jpeg")
-                            put("data", base64Image)
+                            put("data", base64String)
                         })
                     })
-                })
+                }
+
+                // Add the populated parts array to the main object
+                put("parts", partsArray)
             })
         })
     }
@@ -480,9 +588,9 @@ private suspend fun callGeminiApi(prompt: String, base64Image: String): String =
                 val response = reader.readText()
                 val jsonResponse = JSONObject(response)
 
-                // Navigate: candidates[0] -> content -> parts[0] -> text
                 val candidates = jsonResponse.optJSONArray("candidates")
-                if (candidates != null && candidates.length() > 0) {val content = candidates.getJSONObject(0).optJSONObject("content")
+                if (candidates != null && candidates.length() > 0) {
+                    val content = candidates.getJSONObject(0).optJSONObject("content")
                     val parts = content?.optJSONArray("parts")
                     if (parts != null && parts.length() > 0) {
                         return@use parts.getJSONObject(0).optString("text", "No text response found.")
@@ -496,6 +604,14 @@ private suspend fun callGeminiApi(prompt: String, base64Image: String): String =
         }
     }
 }
+
+
+
+
+
+
+
+
 private suspend fun makeGeminiApiCall(apiKey: String, prompt: String): String = withContext(Dispatchers.IO) {
     // Using gemini-1.5-flash which is stable
     val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=$GEMINI_API_KEY")
