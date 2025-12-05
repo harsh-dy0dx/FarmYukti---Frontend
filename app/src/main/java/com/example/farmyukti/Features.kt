@@ -173,6 +173,33 @@ fun CropRecommendationScreen(
     }
 }
 
+@Composable
+fun gallerySelector(list: MutableList<Bitmap>) {
+
+    val context = LocalContext.current
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(3) // Limit to 3
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            errorMessage = null
+            uris.forEach { uri ->
+                try {
+                    val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+                    val bitmap = BitmapFactory.decodeStream(inputStream)
+                    if (bitmap != null && list.size < 3) {
+                        list.add(bitmap)
+                    }
+                } catch (e: Exception) {
+                    errorMessage = "Failed to load some images."
+                }
+            }
+        }
+    }
+
+
+}
+
 
 
 @Composable
@@ -215,6 +242,7 @@ fun PlantDiagnosisScreen(
             }
         }
     }
+//    gallerySelector(selectedImages)
 
     // 2. Camera Launcher (Captures a thumbnail bitmap)
     val cameraLauncher = rememberLauncherForActivityResult(

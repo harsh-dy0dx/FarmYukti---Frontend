@@ -16,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -40,30 +40,19 @@ fun FarmerMainScreen(navController: NavController, appViewModel: AppViewModel) {
     val bottomNavController = rememberNavController()
     Scaffold(bottomBar = {
         NavigationBar {
-            // Updated labels for clarity
             val items = listOf(Screen.FarmerHome, Screen.FarmerListings, Screen.FarmerAdvisary, Screen.Profile)
             val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
             items.forEach { screen ->
-                NavigationBarItem(
-                    icon = { Icon(screen.icon, screen.label) },
-                    label = { Text(screen.label) },
-                    selected = currentRoute == screen.route,
-                    onClick = {
-                        bottomNavController.navigate(screen.route) {
-                            popUpTo(bottomNavController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                )
+                NavigationBarItem(icon = { Icon(screen.icon, screen.label) }, label = { Text(screen.label) }, selected = currentRoute == screen.route, onClick = {
+                    bottomNavController.navigate(screen.route) { popUpTo(bottomNavController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true }
+                })
             }
         }
     }) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             NavHost(navController = bottomNavController, startDestination = Screen.FarmerHome.route) {
                 composable(Screen.FarmerHome.route) { FarmerHomeScreen(navController, appViewModel) }
-                // This screen now handles both My Listings and Market Feed via Tabs
                 composable(Screen.FarmerListings.route) { FarmerListingsScreen(navController, appViewModel) }
                 composable(Screen.Profile.route) { ProfileScreen(navController, appViewModel) }
                 composable(Screen.FarmerAdvisary.route) { FarmerAdvisoryScreen(navController) }
@@ -75,32 +64,14 @@ fun FarmerMainScreen(navController: NavController, appViewModel: AppViewModel) {
 @Composable
 fun FarmerHomeScreen(navController: NavController, appViewModel: AppViewModel) {
     val userProfile by appViewModel.userProfile.collectAsState()
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F5F5)),
-        contentPadding = PaddingValues(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    LazyColumn(modifier = Modifier.fillMaxSize().background(Color(0xFFF5F5F5)), contentPadding = PaddingValues(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("Welcome Back,", style = MaterialTheme.typography.bodyLarge)
-                    Text("Hi ${userProfile?.name ?: "Farmer"}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                }
-                Icon(
-                    Icons.Default.AccountCircle,
-                    "Profile",
-                    modifier = Modifier.size(48.dp).clickable { navController.navigate(Screen.Profile.route) },
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column { Text("Welcome Back,", style = MaterialTheme.typography.bodyLarge); Text("Hi ${userProfile?.name ?: "Farmer"}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
+                Icon(Icons.Default.AccountCircle, "Profile", modifier = Modifier.size(48.dp).clickable { navController.navigate(Screen.Profile.route) }, tint = MaterialTheme.colorScheme.primary)
             }
         }
-
         item { AutoSlidingBanner(DataModelist) { } }
-
         item { Text("Quick Actions", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp, start = 16.dp)) }
         item {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceAround) {
@@ -110,110 +81,11 @@ fun FarmerHomeScreen(navController: NavController, appViewModel: AppViewModel) {
             }
             Spacer(Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceAround) {
-                QuickActionCard("Market Prices", Icons.AutoMirrored.Filled.TrendingUp) { navController.navigate(Screen.Mandi.route) }
+                QuickActionCard("Market Prices", Icons.Filled.TrendingUp) { navController.navigate(Screen.Mandi.route) }
                 QuickActionCard("Favourites", Icons.Default.Favorite) { navController.navigate(Screen.Favorites.route) }
                 QuickActionCard("Profile", Icons.Filled.AccountCircle) { navController.navigate(Screen.Profile.route) }
             }
         }
-    }
-}
-
-// --- NEW & UPDATED: Farmer Listings Screen with Tabs ---
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewModel) {
-    val listings by appViewModel.listings.collectAsState()
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("My Produce", "Market Feed")
-    val currentUserId = appViewModel.currentUserId
-
-    Scaffold(
-        topBar = {
-            Column {
-                TopAppBar(title = { Text("Listings") })
-                TabRow(selectedTabIndex = selectedTabIndex) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = { Text(title) }
-                        )
-                    }
-                }
-            }
-        },
-        floatingActionButton = {
-            // Only show "Add" button if on "My Produce" tab
-            if (selectedTabIndex == 0) {
-                ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(Screen.CreateListing.route) },
-                    icon = { Icon(Icons.Default.Add, "Add") },
-                    text = { Text("New Listing") }
-                )
-            }
-        }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            if (selectedTabIndex == 0) {
-                // --- Tab 1: My Listings (Farmer's own items) ---
-                val myListings = listings.filter { it.farmerId == currentUserId }
-
-                if (myListings.isEmpty()) {
-                    EmptyStateMessage(message = "You haven't listed any produce yet.")
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(myListings) { listing ->
-                            ProduceListItem(
-                                listing = listing,
-                                onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) },
-                                // Farmer can delete their own listings
-                                onDelete = { appViewModel.deleteListing(listing.id) }
-                            )
-                        }
-                    }
-                }
-            } else {
-                // --- Tab 2: Market Feed (All listings from other farmers) ---
-                val otherListings = listings.filter { it.farmerId != currentUserId }
-
-                if (otherListings.isEmpty()) {
-                    EmptyStateMessage(message = "No other listings in the market right now.")
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(otherListings) { listing ->
-                            ProduceListItem(
-                                listing = listing,
-                                onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) },
-                                // Show Chat button for other farmers' listings
-                                showChatButton = true,
-                                onDelete = null // Cannot delete others' listings
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun EmptyStateMessage(message: String) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(Icons.Default.ShoppingBag, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = message, style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
     }
 }
 
@@ -264,6 +136,19 @@ fun CreateListingScreen(navController: NavController, appViewModel: AppViewModel
                 } else Toast.makeText(context, "Fill required fields", Toast.LENGTH_SHORT).show()
             }, modifier = Modifier.fillMaxWidth().height(50.dp), enabled = !isLoading) { if (isLoading) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary) else Text("Create Listing") }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewModel) {
+    val listings by appViewModel.listings.collectAsState()
+    Scaffold(topBar = { TopAppBar(title = { Text("My Produce Listings") }) }, floatingActionButton = {
+        Button(onClick = { navController.navigate(Screen.CreateListing.route) }, shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.Add, "Add", modifier = Modifier.padding(end = 8.dp)); Text("New Listing") }
+    }) { padding ->
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            items(listings) { listing -> ProduceListItem(listing = listing, onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) }, onDelete = { appViewModel.deleteListing(listing.id) }) }
         }
     }
 }
