@@ -69,7 +69,7 @@ fun FarmerMainScreen(navController: NavController, appViewModel: AppViewModel) {
                 composable(Screen.FarmerHome.route) { FarmerHomeScreen(navController, appViewModel) }
                 composable(Screen.FarmerListings.route) { FarmerListingsScreen(navController, appViewModel) }
                 composable(Screen.Profile.route) { ProfileScreen(navController, appViewModel) }
-                composable(Screen.FarmerAdvisary.route) { FarmerAdvisoryScreen(navController) }
+                composable(Screen.FarmerAdvisary.route) { AgriAdvisoryAppContainer() }
             }
         }
     }

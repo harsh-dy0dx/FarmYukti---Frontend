@@ -1,6 +1,7 @@
 package com.example.farmyukti
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +11,7 @@ import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
 import com.example.farmyukti.model.WeatherResponse
+import com.example.farmyukti.repo.RetrofitClient
 import com.example.farmyukti.repo.RetrofitClientWeather
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
@@ -388,35 +390,76 @@ class AppViewModel : ViewModel() {
 
 
     //weather
+// Current state of the location text input
+    var userInputLocation by mutableStateOf("")
 
-    // LiveData/State to hold the result
+    // The location string used for the *API call*. Defaulting to auto:ip is often safe.
+    var activeLocationQuery by mutableStateOf("auto:ip")
+        private set
+
     var weatherData by mutableStateOf<WeatherResponse?>(null)
         private set
+
 
     var isLoading by mutableStateOf(false)
         private set
 
     var error by mutableStateOf<String?>(null)
-        private set
 
-    // Replace with your actual key from the API call screenshot: 5fa0c1fe2923498bbb33154728250512
-    private val API_KEY = "YOUR_API_KEY_HERE"
+    // ... (isLoading and error states remain the same) ...
+    private val API_KEY = "5fa0c1fe2923498bb33154728250512" // Replace with your actual key
 
-    fun fetchWeather(city: String) {
+
+    // --- State Update Functions ---
+
+    fun onUserInputLocationChange(newInput: String) {
+        userInputLocation = newInput
+    }
+
+    fun submitManualLocation() {
+        if (userInputLocation.isNotBlank()) {
+            activeLocationQuery = userInputLocation
+            fetchWeather(activeLocationQuery)
+        }
+    }
+
+    /**
+     * Sets the location using GPS coordinates and triggers a fetch.
+     * The Weather API accepts Lat/Lon format: "lat,lon" directly in the 'q' parameter.
+     */
+    fun setLocationFromGps(latitude: Double, longitude: Double) {
+        val gpsQuery = "$latitude,$longitude"
+        activeLocationQuery = gpsQuery
+        userInputLocation = "" // Clear manual input when using GPS
+        Log.d("shivam", "setLocationFromGps: $gpsQuery")
+        fetchWeather(gpsQuery)
+    }
+
+    fun setLocationToAutoIP() {
+        activeLocationQuery = "auto:ip"
+        userInputLocation = "" // Clear manual input
+        fetchWeather("auto:ip")
+    }
+
+
+
+    // --- API Call Function ---
+    fun fetchWeather(query: String) {
+        // Run API call logic using the current 'query'
         isLoading = true
         error = null
 
         viewModelScope.launch {
             try {
-                // The parameters match your original API call structure
+                // Use the generic 'query' parameter
                 val response = RetrofitClientWeather.weatherService.getCurrentWeather(
                     apiKey = API_KEY,
-                    location = city,
+                    location = query,
                     includeAqi = "yes"
                 )
                 weatherData = response
             } catch (e: Exception) {
-                error = "Failed to fetch weather: ${e.message}"
+                error = "Failed to fetch weather for $query: ${e.message}"
             } finally {
                 isLoading = false
             }

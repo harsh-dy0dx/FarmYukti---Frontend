@@ -72,11 +72,13 @@ data class MandiRootResponse(
 
 
 ////weather
+// Top-level response structure
 data class WeatherResponse(
     val location: Location,
     val current: Current
 )
 
+// Location data
 data class Location(
     val name: String,
     val region: String,
@@ -84,21 +86,23 @@ data class Location(
     val localtime: String
 )
 
+// Current weather data
 data class Current(
     @SerializedName("temp_c")
     val tempC: Double,
+    @SerializedName("feelslike_c")
+    val feelslikeC: Double,
     val condition: Condition,
     val humidity: Int,
     @SerializedName("wind_kph")
     val windKph: Double,
-    @SerializedName("feelslike_c")
-    val feelslikeC: Double,
     @SerializedName("precip_mm")
-    val precipMm: Double
-    // Include other fields as needed
+    val precipMm: Double,
+    val uv: Double
 )
 
+// Condition details, including the icon URL
 data class Condition(
     val text: String,
-    val icon: String // This is the URL path for the weather icon
+    val icon: String // This is the URL path for the weather icon, e.g., "//cdn.weatherapi.com/weather/64x64/day/302.png"
 )

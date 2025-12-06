@@ -42,8 +42,8 @@ interface WeatherApiService {
     @GET("v1/current.json")
     suspend fun getCurrentWeather(
         @Query("key") apiKey: String,
-        @Query("q") location: String, // 'q' is the query parameter for the city/location
-        @Query("aqi") includeAqi: String // 'aqi' parameter
+        @Query("q") location: String, // Accepts city name, lat,lon, or auto:ip
+        @Query("aqi") includeAqi: String // 'aqi' parameter from your JSON response
     ): WeatherResponse
 }
 
