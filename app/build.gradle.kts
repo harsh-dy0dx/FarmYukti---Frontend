@@ -77,9 +77,6 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.generativeai)
     implementation(libs.androidx.compose.runtime)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.ui.text)
-    implementation(libs.androidx.compose.foundation)
     //implementation(libs.firebase.storage)
 
     testImplementation(libs.junit)
@@ -91,9 +88,12 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
 
-
-    // Location Services (Fused Location Provider)
-    implementation("com.google.android.gms:play-services-location:21.3.0")
-// Optional: Accompanist Permissions (or use Compose's built-in APIs)
-    implementation("com.google.accompanist:accompanist-permissions:0.35.0-alpha")
+    // Retrofit for networking
+   // implementation("com.squareup.retrofit2:retrofit:2.9.0")
+// Gson Converter for JSON parsing
+  //  implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+// Kotlin Coroutines for asynchronous operations
+  //  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+// ViewModel and LiveData (or State/Flow) for managing UI data
+   // implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
 }

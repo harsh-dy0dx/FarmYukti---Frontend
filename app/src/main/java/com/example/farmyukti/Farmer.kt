@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,6 +46,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.farmyukti.repo.safeClickable
 import java.io.File
 import java.io.FileOutputStream
@@ -86,6 +88,16 @@ fun ProfileScreen(navController: NavController, appViewModel: AppViewModel) {
     var agriStackId by remember { mutableStateOf(userProfile?.agriStackId ?: "") }
     val context = LocalContext.current
 
+    val singlePhotoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                // Pass 'context' here!
+                appViewModel.uploadProfileImage(context, uri)
+            }
+        }
+    )
+
     Scaffold(
         containerColor = Color(0xFFF9FAFB), // Soft modern background
         topBar = {
@@ -108,18 +120,41 @@ fun ProfileScreen(navController: NavController, appViewModel: AppViewModel) {
                 modifier = Modifier.padding(vertical = 24.dp)
             ) {
                 Surface(
-                    modifier = Modifier.size(120.dp),
+                    modifier = Modifier.size(120.dp)
+                    .safeClickable{
+                    singlePhotoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primaryContainer,
                     border = BorderStroke(4.dp, Color.White),
                     shadowElevation = 4.dp
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = "Profile",
-                        modifier = Modifier.padding(16.dp).fillMaxSize(),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    if (userProfile?.photoUrl.isNullOrEmpty()) {
+                        // Fallback Icon
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Default Profile",
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxSize(),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        // Actual Image from Cloudinary
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(userProfile?.photoUrl)
+                                .crossfade(true)
+                                // Optional: Add a memory cache key to force refresh if URL is same
+                                // .memoryCacheKey(userProfile?.photoUrl + System.currentTimeMillis())
+                                .build(),
+                            contentDescription = "Profile Photo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
                 // Role Badge
                 Surface(
@@ -183,33 +218,41 @@ fun ProfileScreen(navController: NavController, appViewModel: AppViewModel) {
                         HorizontalDivider(Modifier.padding(vertical = 8.dp))
                         Text("Farmer Verification", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        // If already verified, show static badge
+                        if (userProfile?.isVerified == true) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFE8F5E9), RoundedCornerShape(12.dp))
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Verified, "Verified", tint = Color(0xFF4CAF50), modifier = Modifier.size(24.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text("Status: Verified", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                    Text("ID: $agriStackId", style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32))
+                                }
+                            }
+                        } else {
+                            // If NOT verified, show Input and the New Animated Button
                             OutlinedTextField(
                                 value = agriStackId,
                                 onValueChange = { agriStackId = it },
-                                label = { Text("AgriStack ID") },
-                                modifier = Modifier.weight(1f),
+                                label = { Text("Enter 11-digit AgriStack ID") },
+                                modifier = Modifier.fillMaxWidth(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            Spacer(Modifier.width(8.dp))
 
-                            if (userProfile?.isVerified == true) {
-                                Icon(Icons.Default.Verified, "Verified", tint = Color.Blue, modifier = Modifier.size(32.dp))
-                            } else {
-                                Button(
-                                    onClick = { appViewModel.verifyAgriStackId(agriStackId) },
-                                    enabled = verificationStatus !is VerificationState.Loading,
-                                    shape = RoundedCornerShape(12.dp),
-                                    contentPadding = PaddingValues(horizontal = 16.dp)
-                                ) {
-                                    if (verificationStatus is VerificationState.Loading) {
-                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
-                                    } else {
-                                        Text("Verify")
-                                    }
-                                }
-                            }
+                            Spacer(Modifier.height(8.dp))
+
+                            // HERE IS THE INTEGRATED BUTTON CALL
+                            AgriStackVerificationButton(
+                                agriStackId = agriStackId,
+                                verificationStatus = verificationStatus,
+                                onVerifyClick = { appViewModel.verifyAgriStackId(agriStackId) }
+                            )
                         }
                     }
                 }
@@ -236,7 +279,6 @@ fun ProfileScreen(navController: NavController, appViewModel: AppViewModel) {
                 OutlinedButton(
                     onClick = {
                         appViewModel.logout()
-                        // Ensure we clear the back stack so user can't go back to profile
                         navController.navigate(Screen.Auth.route) { popUpTo(0) { inclusive = true } }
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -248,8 +290,75 @@ fun ProfileScreen(navController: NavController, appViewModel: AppViewModel) {
                     Text("Log Out")
                 }
             }
-
             Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+@Composable
+fun AgriStackVerificationButton(
+    agriStackId: String,
+    verificationStatus: VerificationState,
+    onVerifyClick: () -> Unit
+) {
+    // Animation states
+    val isSuccess = verificationStatus is VerificationState.Success
+    val isError = verificationStatus is VerificationState.Error
+    val isLoading = verificationStatus is VerificationState.Loading
+
+    // 1. Dynamic Color Transition
+    val buttonColor by animateColorAsState(
+        targetValue = when {
+            isSuccess -> Color(0xFF4CAF50) // Green for Success
+            isError -> Color(0xFFEF5350)   // Red for Error (temporary flash)
+            else -> Color(0xFF6366F1)      // Primary Brand Color
+        },
+        label = "ButtonColor"
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 2. The Button
+        Button(
+            onClick = onVerifyClick,
+            enabled = !isLoading && !isSuccess,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = buttonColor,
+                disabledContainerColor = if (isSuccess) Color(0xFF4CAF50) else Color.Gray
+            ),
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp)
+        ) {
+            // 3. Smooth Content Transition
+            androidx.compose.animation.AnimatedContent(
+                targetState = verificationStatus,
+                label = "ButtonContent"
+            ) { state ->
+                when (state) {
+                    is VerificationState.Loading -> {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
+                    }
+                    is VerificationState.Success -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Verified", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    else -> {
+                        Text("Verify AgriStack ID", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+
+        // 4. Error Message Display
+        if (verificationStatus is VerificationState.Error) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = verificationStatus.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }
@@ -492,6 +601,12 @@ fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewMode
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     val tabs = listOf("My Produce", "Market Listings")
 
+    // Filter States
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("All") }
+    var selectedGrade by remember { mutableStateOf("All") }
+    var selectedLocation by remember { mutableStateOf("All") }
+
     Scaffold(
         topBar = {
             Column {
@@ -521,49 +636,86 @@ fun FarmerListingsScreen(navController: NavController, appViewModel: AppViewMode
             }
         }
     ) { padding ->
-
-        // Filter Logic
-        val filteredListings = if (selectedTabIndex == 0) {
-            // My Produce: Show only my listings
-            listings.filter { it.farmerId == currentUserId }
-        } else {
-            // Market Listings: Show everything EXCEPT my listings
-            listings.filter { it.farmerId != currentUserId }
+        // 1. Prepare Base List
+        val baseList = remember(listings, selectedTabIndex, currentUserId) {
+            if (selectedTabIndex == 0) listings.filter { it.farmerId == currentUserId }
+            else listings.filter { it.farmerId != currentUserId }
         }
 
-        if (filteredListings.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (selectedTabIndex == 0) "You haven't added any produce yet." else "No market listings available.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.Gray
-                )
-            }
-        } else {
+        // 2. Prepare Dropdown Options
+        val availableCategories = remember(baseList) { appViewModel.getUniqueCategories(baseList) }
+        val availableLocations = remember(baseList) { appViewModel.getUniqueLocations(baseList) }
+        val availableGrades = listOf("All", "Grade A", "Grade B", "Grade C")
+
+        // 3. Filter Logic
+        val finalFilteredList = remember(baseList, searchQuery, selectedCategory, selectedGrade, selectedLocation) {
+            appViewModel.filterListings(
+                originalList = baseList,
+                query = searchQuery,
+                category = if (selectedCategory == "All") null else selectedCategory,
+                grade = if (selectedGrade == "All") null else selectedGrade,
+                location = if (selectedLocation == "All") null else selectedLocation
+            )
+        }
+
+        // *** FIX: Wrapped in Column so Search and List don't overlap ***
+        Column(
+            modifier = Modifier
+                .padding(padding) // Apply scaffold padding here
+                .fillMaxSize()
+        ) {
+
+            // Search Bar Component
+            SearchAndFilterSection(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                categories = availableCategories,
+                selectedCategory = selectedCategory,
+                onCategoryChange = { selectedCategory = it },
+                grades = availableGrades,
+                selectedGrade = selectedGrade,
+                onGradeChange = { selectedGrade = it },
+                locations = availableLocations,
+                selectedLocation = selectedLocation,
+                onLocationChange = { selectedLocation = it }
+            )
+
+            // Listings List
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                    .fillMaxWidth()
+                    .weight(1f) // Takes up remaining space after SearchBar
+                    .background(Color(0xFFF5F5F5)),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(filteredListings) { listing ->
-                    ProduceListItem(
-                        listing = listing,
-                        onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) },
-                        // Only allow deletion if we are in "My Produce" tab
-                        onDelete = if (selectedTabIndex == 0) {
-                            { appViewModel.deleteListing(listing.id) }
-                        } else {
-                            // Pass empty lambda to hide delete button
-                            {}
+                if (finalFilteredList.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(400.dp), // Give it some height to center vertically
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "No matches found" else "No listings available",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
                         }
-                    )
+                    }
+                } else {
+                    items(finalFilteredList) { listing ->
+                        ProduceListItem(
+                            listing = listing,
+                            onClick = { navController.navigate(Screen.ListingDetail.createRoute(listing.id)) },
+                            onDelete = if (selectedTabIndex == 0) {
+                                { appViewModel.deleteListing(listing.id) }
+                            } else {
+                                {}
+                            }
+                        )
+                    }
                 }
             }
         }

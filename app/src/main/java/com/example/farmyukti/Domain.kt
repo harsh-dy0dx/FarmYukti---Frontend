@@ -73,6 +73,7 @@ data class UserProfile(
     val mobile: String = "",
     val agriStackId: String = "",
     val isVerified: Boolean = false,
+    val photoUrl: String? = null,
     val favorites: List<String> = emptyList()
 )
 

@@ -9,6 +9,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import com.cloudinary.android.callback.UploadCallback
 import com.example.farmyukti.model.WeatherResponse
 import com.example.farmyukti.repo.RetrofitClient
@@ -16,6 +21,7 @@ import com.example.farmyukti.repo.RetrofitClientWeather
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +33,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 sealed class AuthUiState {
     object Idle : AuthUiState()
@@ -35,6 +44,12 @@ sealed class AuthUiState {
     object SignedOut : AuthUiState()
     object SignUpSuccess : AuthUiState()
     data class Error(val message: String?) : AuthUiState()
+}
+sealed class ImageUploadState {
+    object Idle : ImageUploadState()
+    object Loading : ImageUploadState()
+    object Success : ImageUploadState()
+    data class Error(val message: String) : ImageUploadState()
 }
 
 sealed class VerificationState {
@@ -45,18 +60,21 @@ sealed class VerificationState {
 }
 
 class AppViewModel : ViewModel() {
-    private val auth: FirebaseAuth = Firebase.auth
-    private val db: FirebaseFirestore = Firebase.firestore
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
     val currentUserId: String? get() = auth.currentUser?.uid
 
     private val _userRole = MutableStateFlow<UserRole?>(null)
     val userRole: StateFlow<UserRole?> = _userRole.asStateFlow()
 
+    private val _imageUploadStatus = MutableStateFlow<ImageUploadState>(ImageUploadState.Idle)
+    val imageUploadStatus: StateFlow<ImageUploadState> = _imageUploadStatus
+
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
 
     private val _verificationStatus = MutableStateFlow<VerificationState>(VerificationState.Idle)
-    val verificationStatus: StateFlow<VerificationState> = _verificationStatus.asStateFlow()
+    val verificationStatus: StateFlow<VerificationState> = _verificationStatus
 
     private val _authUiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val authUiState: StateFlow<AuthUiState> = _authUiState.asStateFlow()
@@ -72,6 +90,49 @@ class AppViewModel : ViewModel() {
         fetchListings()
     }
 
+    // --- Search & Filter Logic ---
+    // In AppViewModel.kt -> replace the existing filterListings function with this:
+
+    fun filterListings(
+        originalList: List<ProduceListing>,
+        query: String,
+        category: String?,
+        grade: String?,
+        location: String?
+    ): List<ProduceListing> {
+        return originalList.filter { item ->
+            // 1. Search Query
+            val matchesSearch = if (query.isBlank()) true else {
+                item.produceName.contains(query, ignoreCase = true) ||
+                        item.farmerName.contains(query, ignoreCase = true)
+            }
+
+            // 2. Category Filter (CHANGED TO CONTAINS)
+            val matchesCategory = if (category.isNullOrBlank() || category == "All") true else {
+                item.produceName.contains(category, ignoreCase = true) // <--- Fixed here
+            }
+
+            // 3. Grade Filter
+            val matchesGrade = if (grade.isNullOrBlank() || grade == "All") true else {
+                item.aiQualityGrade.equals(grade, ignoreCase = true)
+            }
+
+            // 4. Location Filter
+            val matchesLocation = if (location.isNullOrBlank() || location == "All") true else {
+                item.location.contains(location, ignoreCase = true)
+            }
+
+            matchesSearch && matchesCategory && matchesGrade && matchesLocation
+        }
+    }
+
+    // Helper to get unique values for Dropdowns
+    fun getUniqueLocations(listings: List<ProduceListing>): List<String> =
+        listOf("All") + listings.map { it.location }.distinct().sorted()
+
+    fun getUniqueCategories(listings: List<ProduceListing>): List<String> =
+        listOf("All") + listings.map { it.produceName }.distinct().sorted()
+
     private fun checkCurrentUser() {
         viewModelScope.launch {
             _authUiState.value = AuthUiState.Loading
@@ -84,6 +145,54 @@ class AppViewModel : ViewModel() {
                 _userProfile.value = null
             }
         }
+    }
+
+    fun uploadProfileImage(context: Context, uri: Uri) {
+        val uid = auth.currentUser?.uid ?: return
+        _imageUploadStatus.value = ImageUploadState.Loading
+
+        MediaManager.get().upload(uri)
+            .unsigned("farmyukti_preset")
+            .callback(object : UploadCallback {
+                override fun onStart(requestId: String) {}
+
+                override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
+
+                override fun onSuccess(requestId: String, resultData: Map<*, *>) {
+                    // 1. Safety Fix: Prevent crash if key is missing or null
+                    val downloadUrl = resultData["secure_url"] as? String
+
+                    if (downloadUrl == null) {
+                        _imageUploadStatus.value = ImageUploadState.Error("Upload failed: No URL returned")
+                        return
+                    }
+
+                    // 2. Threading Fix: Toasts MUST run on the Main Thread
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(context, "Image uploaded successfully", Toast.LENGTH_SHORT).show()
+                    }
+
+                    // 3. Database Update
+                    db.collection("users").document(uid)
+                        .update("photoUrl", downloadUrl)
+                        .addOnSuccessListener {
+                            // 4. The "Reflect Back" Fix:
+                            // This pulls the new data from DB, updating the variable your UI observes
+                            fetchUserData(uid)
+                            _imageUploadStatus.value = ImageUploadState.Success
+                        }
+                        .addOnFailureListener { e ->
+                            _imageUploadStatus.value = ImageUploadState.Error("Firestore update failed: ${e.message}")
+                        }
+                }
+
+                override fun onError(requestId: String, error: ErrorInfo) {
+                    _imageUploadStatus.value = ImageUploadState.Error(error.description)
+                }
+
+                override fun onReschedule(requestId: String, error: ErrorInfo) {}
+            })
+            .dispatch()
     }
 
     fun fetchUserData(uid: String) {
@@ -137,39 +246,61 @@ class AppViewModel : ViewModel() {
 
     fun verifyAgriStackId(agriStackId: String) {
         viewModelScope.launch {
-            if (agriStackId.length != 11) {
+            // 1. Strict Input Validation (11 Digits only)
+            if (!agriStackId.matches(Regex("^\\d{11}$"))) {
                 _verificationStatus.value = VerificationState.Error("ID must be exactly 11 digits")
                 return@launch
             }
+
             _verificationStatus.value = VerificationState.Loading
+            val currentUser = auth.currentUser
+
+            if (currentUser == null) {
+                _verificationStatus.value = VerificationState.Error("User not logged in")
+                return@launch
+            }
+
             try {
                 val agriRef = db.collection("agristack_ids").document(agriStackId)
-                val agriDoc = agriRef.get().await()
+                val userRef = db.collection("users").document(currentUser.uid)
 
-                if (agriDoc.exists()) {
-                    val linkedEmail = agriDoc.getString("linked_email")
-                    val currentUserEmail = auth.currentUser?.email
-                    if (!linkedEmail.isNullOrEmpty() && linkedEmail != currentUserEmail) {
-                        _verificationStatus.value = VerificationState.Error("This ID is already linked to another account.")
-                        return@launch
+                // 2. Use a Transaction for Safety (Atomic Operation)
+                db.runTransaction { transaction ->
+                    val snapshot = transaction.get(agriRef)
+
+                    if (!snapshot.exists()) {
+                        throw FirebaseFirestoreException("Invalid AgriStack ID", FirebaseFirestoreException.Code.ABORTED)
                     }
-                    if (linkedEmail.isNullOrEmpty() && currentUserEmail != null) {
-                        agriRef.update("linked_email", currentUserEmail).await()
+
+                    val linkedEmail = snapshot.getString("linked_email")
+
+                    // Check if already linked to SOMEONE ELSE
+                    if (!linkedEmail.isNullOrEmpty() && linkedEmail != currentUser.email) {
+                        throw FirebaseFirestoreException("ID already linked to another account", FirebaseFirestoreException.Code.ALREADY_EXISTS)
                     }
-                    val user = auth.currentUser
-                    if (user != null) {
-                        db.collection("users").document(user.uid).update("isVerified", true).await()
-                        fetchUserData(user.uid)
-                        _verificationStatus.value = VerificationState.Success
-                    }
-                } else {
-                    _verificationStatus.value = VerificationState.Error("Invalid AgriStack ID.")
-                }
+
+                    // If not linked, or linked to THIS user (re-verification), proceed
+                    transaction.update(agriRef, "linked_email", currentUser.email)
+                    transaction.update(userRef, "isVerified", true)
+                    transaction.update(userRef, "agriStackId", agriStackId) // Also save the ID to user profile
+
+                    true // Return true to confirm success
+                }.await()
+
+                // 3. Success State
+                fetchUserData(currentUser.uid) // Refresh local data
+                _verificationStatus.value = VerificationState.Success
+
             } catch (e: Exception) {
-                _verificationStatus.value = VerificationState.Error("Verification failed: ${e.message}")
+                val errorMessage = when (e) {
+                    is FirebaseFirestoreException -> e.message ?: "Verification error"
+                    else -> "Connection failed: ${e.message}"
+                }
+                _verificationStatus.value = VerificationState.Error(errorMessage)
             }
         }
     }
+
 
     fun toggleFavorite(listingId: String) {
         val user = auth.currentUser ?: return
@@ -328,7 +459,7 @@ class AppViewModel : ViewModel() {
             }
         }
     }
-
+    //*********************************************************************
 
 
 
