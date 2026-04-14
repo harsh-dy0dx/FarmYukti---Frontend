@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.generativeai)
     implementation(libs.androidx.compose.runtime)
+    implementation(libs.play.services.location)
     //implementation(libs.firebase.storage)
 
     testImplementation(libs.junit)
@@ -86,7 +87,8 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
+    implementation("com.google.android.gms:play-services-location:21.1.0")
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 
     // Retrofit for networking
    // implementation("com.squareup.retrofit2:retrofit:2.9.0")
