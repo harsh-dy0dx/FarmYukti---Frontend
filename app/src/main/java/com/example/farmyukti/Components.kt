@@ -3,6 +3,7 @@ package com.example.farmyukti
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -29,6 +30,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.farmyukti.repo.safeClickable
 import kotlinx.coroutines.delay
@@ -117,36 +119,123 @@ fun AdvisoryCard(advisory: Advisory) {
 }
 
 @Composable
-fun ProduceListItem(listing: ProduceListing, onClick: () -> Unit, modifier: Modifier = Modifier, showChatButton: Boolean = false, onDelete: (() -> Unit)? = null) {
+fun ProduceListItem(
+    listing: ProduceListing,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    showChatButton: Boolean = false,
+    onDelete: (() -> Unit)? = null
+) {
     val context = LocalContext.current
-    Card(modifier = modifier.fillMaxWidth().safeClickable { onClick() }, elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Row(modifier = Modifier.padding(12.dp)) {
-            if (listing.imageUrl.isNotEmpty()) {
-                AsyncImage(model = listing.imageUrl, contentDescription = listing.produceName, modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)).background(Color.LightGray), contentScale = ContentScale.Crop)
-            } else {
-                Image(painter = painterResource(id = android.R.drawable.ic_menu_gallery), contentDescription = listing.produceName, modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)).background(Color.Gray), contentScale = ContentScale.Crop)
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(listing.produceName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Qty: ${listing.quantityKg} kg", style = MaterialTheme.typography.bodyMedium)
-                Text("Price: ₹${listing.basePricePerKg}/kg", style = MaterialTheme.typography.bodyMedium)
-                Text("Loc: ${listing.location}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primary).padding(horizontal = 8.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
-                    Text(listing.aiQualityGrade, color = Color.White, style = MaterialTheme.typography.labelMedium)
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .safeClickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Image
+                val imageToLoad = if (listing.imageUrls.isNotEmpty()) listing.imageUrls.first() else listing.imageUrl
+                if (imageToLoad.isNotEmpty()) {
+                    AsyncImage(
+                        model = imageToLoad,
+                        contentDescription = listing.produceName,
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(Color.LightGray),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Default.Image, null, tint = Color.White) }
                 }
-                if (onDelete != null) {
-                    IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red) }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = listing.produceName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        // Grade Pill
+                        Surface(
+                            color = if (listing.aiQualityGrade.contains("A")) Color(0xFFDCFCE7) else Color(0xFFFEF9C3),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = listing.aiQualityGrade,
+                                color = if (listing.aiQualityGrade.contains("A")) Color(0xFF15803D) else Color(0xFF854D0E),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "Sold by: ${listing.farmerName}", style = MaterialTheme.typography.bodySmall, color = MutedForeground)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "Qty: ${listing.quantityKg} kg", style = MaterialTheme.typography.bodySmall, color = MutedForeground)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "₹${listing.basePricePerKg}/kg",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = FarmPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(12.dp), tint = MutedForeground)
+                            Text(text = listing.location, style = MaterialTheme.typography.bodySmall, color = MutedForeground)
+                        }
+                    }
                 }
-                if(showChatButton) {
-                    Spacer(Modifier.height(8.dp))
-                    IconButton(onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW)
-                        intent.data = Uri.parse("https://api.whatsapp.com/send?phone=${listing.contactNumber}")
-                        try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
-                    }) { Icon(Icons.AutoMirrored.Filled.Chat, "Chat", tint = Color(0xFF25D366)) }
+            }
+
+            // Buttons
+            if (showChatButton || onDelete != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (showChatButton) {
+                        Button(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW)
+                                intent.data = Uri.parse("https://api.whatsapp.com/send?phone=${listing.contactNumber}")
+                                try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+                            },
+                            modifier = Modifier.weight(1f).height(40.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Chat", fontSize = 14.sp)
+                        }
+                    }
+                    if (onDelete != null) {
+                        OutlinedButton(
+                            onClick = onDelete,
+                            modifier = Modifier.height(40.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                            border = BorderStroke(1.dp, Color.Red),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp)) }
+                    }
                 }
             }
         }

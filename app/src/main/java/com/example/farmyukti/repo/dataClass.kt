@@ -104,5 +104,4 @@ data class Current(
 // Condition details, including the icon URL
 data class Condition(
     val text: String,
-    val icon: String // This is the URL path for the weather icon, e.g., "//cdn.weatherapi.com/weather/64x64/day/302.png"
-)
+    val icon: String )

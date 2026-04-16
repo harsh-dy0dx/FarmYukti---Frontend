@@ -78,6 +78,8 @@ dependencies {
     implementation(libs.generativeai)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.play.services.location)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.ui.graphics)
     //implementation(libs.firebase.storage)
 
     testImplementation(libs.junit)

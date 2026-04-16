@@ -1,38 +1,45 @@
 package com.example.farmyukti
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.cloudinary.android.MediaManager
 import com.example.farmyukti.repo.MandiScreen
 import com.example.farmyukti.repo.MandiViewModel
 
 // --- THEME ---
+val FarmPrimary = Color(0xFF4A7C59)
+val Emerald600 = Color(0xFF059669)
+val Green600 = Color(0xFF16A34A)
+val Blue600 = Color(0xFF2563EB)
+val Orange600 = Color(0xFFEA580C)
+val Purple600 = Color(0xFF9333EA)
+val Pink600 = Color(0xFFDB2777)
+val MutedForeground = Color(0xFF6B7280)
+val BackgroundColor = Color(0xFFFDFBF7)
 @Composable
 fun FarmyuktiTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
-            primary = Color(0xFF2E7D32),
+            primary = FarmPrimary,
             onPrimary = Color.White,
-            secondary = Color(0xFF66BB6A),
+            secondary = Emerald600,
             onSecondary = Color.White,
-            background = Color.White,
-            onBackground = Color(0xFF1B1B1B),
+            background = BackgroundColor,
+            onBackground = Color(0xFF2D3319),
             surface = Color.White,
-            onSurface = Color(0xFF1B1B1B),
+            onSurface = Color(0xFF2D3319),
             primaryContainer = Color(0xFFE8F5E9),
             onPrimaryContainer = Color(0xFF1B5E20)
         ),
@@ -50,7 +57,6 @@ class MainActivity : ComponentActivity() {
             MediaManager.init(this, config)
         } catch (e: Exception) { }
 
-        ComposeFoundationFlags.isNonComposedClickableEnabled = true
         setContent {
             FarmyuktiTheme {
                 FarmYuktiApp()
@@ -60,6 +66,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@SuppressLint("ViewModelConstructorInComposable")
 @Composable
 fun FarmYuktiApp(appViewModel: AppViewModel = viewModel()) {
     val navController = rememberNavController()
@@ -97,7 +104,9 @@ fun FarmYuktiApp(appViewModel: AppViewModel = viewModel()) {
             viewModel = MandiViewModel(),
             navController = navController
         ) }
-        composable(Screen.FarmerAdvisary.route) { FarmerAdvisoryScreen(navController) }
+        composable(Screen.FarmerAdvisary.route) { AIChatbotScreen(navController) }
+        composable("weather") { WeatherScreen(appViewModel) }
+        composable("learn") { LearningResourcesScreen() }
         composable(Screen.PestControl.route) { PlantDiagnosisScreen(navController) }
         composable(Screen.CropRec.route) { CropRecommendationScreen(navController) }
     }

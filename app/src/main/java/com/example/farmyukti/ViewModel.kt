@@ -13,17 +13,15 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
+
 import com.cloudinary.android.callback.UploadCallback
 import com.example.farmyukti.model.WeatherResponse
-import com.example.farmyukti.repo.RetrofitClient
+
 import com.example.farmyukti.repo.RetrofitClientWeather
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.ktx.auth
+
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,9 +31,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 sealed class AuthUiState {
     object Idle : AuthUiState()
@@ -60,15 +55,15 @@ sealed class VerificationState {
 }
 
 class AppViewModel : ViewModel() {
+    var sharedSearchQuery by mutableStateOf("")
+    var sharedSelectedCategory by mutableStateOf("All")
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
-    val currentUserId: String? get() = auth.currentUser?.uid
 
     private val _userRole = MutableStateFlow<UserRole?>(null)
     val userRole: StateFlow<UserRole?> = _userRole.asStateFlow()
 
     private val _imageUploadStatus = MutableStateFlow<ImageUploadState>(ImageUploadState.Idle)
-    val imageUploadStatus: StateFlow<ImageUploadState> = _imageUploadStatus
 
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
@@ -538,7 +533,7 @@ class AppViewModel : ViewModel() {
     var error by mutableStateOf<String?>(null)
 
     // ... (isLoading and error states remain the same) ...
-    private val API_KEY = "5fa0c1fe2923498bb33154728250512" // Replace with your actual key
+    public val API_KEY = "AQ.Ab8RN6LIvXj786njf15JVl1NdSLCl7Ze5ImdfhY_8HoVaS5QLQ" // Replace with your actual key
 
 
     // --- State Update Functions ---
@@ -554,23 +549,7 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Sets the location using GPS coordinates and triggers a fetch.
-     * The Weather API accepts Lat/Lon format: "lat,lon" directly in the 'q' parameter.
-     */
-    fun setLocationFromGps(latitude: Double, longitude: Double) {
-        val gpsQuery = "$latitude,$longitude"
-        activeLocationQuery = gpsQuery
-        userInputLocation = "" // Clear manual input when using GPS
-        Log.d("shivam", "setLocationFromGps: $gpsQuery")
-        fetchWeather(gpsQuery)
-    }
 
-    fun setLocationToAutoIP() {
-        activeLocationQuery = "auto:ip"
-        userInputLocation = "" // Clear manual input
-        fetchWeather("auto:ip")
-    }
 
 
 

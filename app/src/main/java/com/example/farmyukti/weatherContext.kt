@@ -15,11 +15,7 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.tasks.CancellationTokenSource
 
 
-/**
- * Extension function on Context to request the current location.
- * This should only be called after checking location permissions are granted.
- * The 'this' keyword inside refers to the Context instance.
- */
+
 @SuppressLint("MissingPermission")
 fun Context.requestCurrentLocation(onSuccess: (Double, Double) -> Unit, onFailure: (Exception) -> Unit) {
 
