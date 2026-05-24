@@ -1,7 +1,17 @@
+import java.util.Properties
+import java.io.FileInputStream
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.gms.google-services")
+}
+
+
+// Read the local.properties file safely
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
 }
 
 android {
@@ -15,11 +25,25 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        val geminiKey = localProperties.getProperty("GEMINI_API_KEY") ?: "\"\""
+        buildConfigField("String", "GEMINI_API_KEY", geminiKey)
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
     }
+
+
+    androidResources {
+        noCompress.add("tflite")
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+
 
     buildTypes {
         release {
@@ -91,6 +115,15 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("com.google.android.gms:play-services-location:21.1.0")
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
+
+
+    implementation("com.google.ai.edge.litert:litert:1.0.1")
+
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
+
+
+
 
     // Retrofit for networking
    // implementation("com.squareup.retrofit2:retrofit:2.9.0")

@@ -1,5 +1,11 @@
 package com.example.farmyukti
 
+
+
+import DiseaseDetector
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Smartphone
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.*
@@ -43,24 +49,67 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
+import com.google.firebase.BuildConfig
 import java.io.InputStream
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Smartphone
 
 
 
 
 
-public const val GEMINI_API_KEY = "AQ.Ab8RN6LIvXj786njf15JVl1NdSLCl7Ze5ImdfhY_8HoVaS5QLQ"
+public const val GEMINI_API_KEY = com.example.farmyukti.BuildConfig.GEMINI_API_KEY
+
+// ─── Add these at file level if they don't exist yet from the PlantDoctor screen ───
+enum class DiagnosisMode1 { ONLINE, OFFLINE }
+
+@Composable
+fun ModeOption1(
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector,
+    label: String,
+    sublabel: String,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = if (selected) Color(0xFF16A34A) else Color.White
+    val contentColor = if (selected) Color.White else Color(0xFF374151)
+    val borderColor = if (selected) Color(0xFF16A34A) else Color(0xFFD1D5DB)
+    val iconTint = if (selected) Color.White else Color(0xFF16A34A)
+    val sublabelColor = if (selected) Color(0xFFD1FAE5) else Color(0xFF9CA3AF)
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = backgroundColor,
+        modifier = modifier
+            .border(width = 1.5.dp, color = borderColor, shape = RoundedCornerShape(16.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp, horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(imageVector = icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
+            Text(text = sublabel, fontSize = 12.sp, color = sublabelColor)
+        }
+    }
+}
 
 @Composable
 fun CropRecommendationScreen(
     navController: NavController,
     modifier: Modifier = Modifier,
 ) {
-    val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
     // ORIGINAL STATE LOGIC REMAINS UNTOUCHED
@@ -76,10 +125,27 @@ fun CropRecommendationScreen(
     var resultText by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // ─── NEW: Online / Offline toggle ───
+    var recommendationMode by remember { mutableStateOf(DiagnosisMode1.ONLINE) }
+
     val isFormValid = nitrogen.isNotEmpty() && phosphorus.isNotEmpty() &&
             potassium.isNotEmpty() && phLevel.isNotEmpty() &&
             rainfall.isNotEmpty() && temperature.isNotEmpty() &&
             humidity.isNotEmpty()
+    val context = LocalContext.current
+
+    val localModelRunner = remember {
+        try {
+            OnnxModelRunner(context, "crop_model.onnx")
+        } catch (e: Exception) {
+            null
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            localModelRunner?.close()
+        }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -135,6 +201,42 @@ fun CropRecommendationScreen(
 
         item { Spacer(modifier = Modifier.height(24.dp)) }
 
+        // ─── NEW: ONLINE / OFFLINE SELECTOR ───
+        item {
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Text(
+                    text = "Recommendation Mode",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1F2937)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ModeOption1(
+                        selected = recommendationMode == DiagnosisMode1.ONLINE,
+                        onClick = { recommendationMode = DiagnosisMode1.ONLINE },
+                        icon = Icons.Default.Cloud,
+                        label = "Online",
+                        sublabel = "Cloud AI",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ModeOption1(
+                        selected = recommendationMode == DiagnosisMode1.OFFLINE,
+                        onClick = { recommendationMode = DiagnosisMode1.OFFLINE },
+                        icon = Icons.Default.Smartphone,
+                        label = "Offline",
+                        sublabel = "On-Device",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(16.dp)) }
+
         // --- SOIL CONDITIONS FORM (FIGMA UI) ---
         item {
             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
@@ -183,9 +285,9 @@ fun CropRecommendationScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // --- ORIGINAL API CALL TRIGGERED HERE ---
+                // ─── UPDATED: API CALL NOW BRANCHES ON MODE ───
                 Button(
                     onClick = {
                         isLoading = true
@@ -193,11 +295,48 @@ fun CropRecommendationScreen(
                         resultText = null
                         scope.launch {
                             try {
-                                val prompt = createCropPrompt(nitrogen, phosphorus, potassium, phLevel, rainfall, temperature, humidity)
-                                val response = makeGeminiApiCall(GEMINI_API_KEY, prompt)
-                                resultText = response
+                                if (recommendationMode == DiagnosisMode1.ONLINE) {
+                                    val prompt = createCropPrompt(nitrogen, phosphorus, potassium, phLevel, rainfall, temperature, humidity)
+                                    val response = makeGeminiApiCall(GEMINI_API_KEY, prompt)
+                                    resultText = response
+                                } else {
+                                    // ─── OFFLINE: PLUG IN YOUR LOCAL MODEL HERE ───
+                                    // Example:
+                                    // val features = floatArrayOf(nitrogen.toFloat(), phosphorus.toFloat(), ...)
+                                    // val prediction = localCropModel.predict(features)
+                                    // resultText = prediction
+
+                                    // Placeholder so the UI flow works immediately:
+
+                                    // Ensure the runner initialized properly
+                                    if (localModelRunner == null) {
+                                        throw IllegalStateException("ONNX Model could not be loaded from assets.")
+                                    }
+
+                                    withContext(Dispatchers.Default) {
+                                        // Package UI input strings into an array matching your model features
+                                        // Standard format order: [N, P, K, Temperature, Humidity, pH, Rainfall]
+                                        val inputFeatures = floatArrayOf(
+                                            nitrogen.toFloatOrNull() ?: 0f,
+                                            phosphorus.toFloatOrNull() ?: 0f,
+                                            potassium.toFloatOrNull() ?: 0f,
+                                            temperature.toFloatOrNull() ?: 0f,
+                                            humidity.toFloatOrNull() ?: 0f,
+                                            phLevel.toFloatOrNull() ?: 0f,
+                                            rainfall.toFloatOrNull() ?: 0f
+                                        )
+
+                                        val prediction = localModelRunner.predictCrop(inputFeatures)
+                                        resultText = "Recommended Crop (Offline Mode):\n\nOptimum crop for these local parameters is likely $prediction."
+                                    }
+
+                                   //. resultText = "Offline recommendation is active.\n\n(Integrate your on-device crop recommendation model here — e.g. TensorFlow Lite or sklearn-onnx — to run inference without internet.)"
+                                }
                             } catch (e: Exception) {
-                                errorMessage = e.localizedMessage ?: "Unknown error"
+                                errorMessage = if (recommendationMode == DiagnosisMode1.ONLINE)
+                                    e.localizedMessage ?: "Unknown error"
+                                else
+                                    "Offline Error: ${e.localizedMessage ?: "Unknown error"}"
                             } finally {
                                 isLoading = false
                             }
@@ -216,11 +355,21 @@ fun CropRecommendationScreen(
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Analyzing Soil...")
+                        Text(
+                            if (recommendationMode == DiagnosisMode1.ONLINE)
+                                "Analyzing Soil Online..."
+                            else
+                                "Analyzing Soil Offline..."
+                        )
                     } else {
                         Icon(Icons.Default.TrendingUp, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Get Recommendation")
+                        Text(
+                            if (recommendationMode == DiagnosisMode1.ONLINE)
+                                "Get Recommendation (Online)"
+                            else
+                                "Get Recommendation (Offline)"
+                        )
                     }
                 }
             }
@@ -258,8 +407,45 @@ fun CropRecommendationScreen(
     }
 }
 
+// ─── Add this enum at file level (or in a separate file) ───
+enum class DiagnosisMode { ONLINE, OFFLINE }
 
+@Composable
+fun ModeOption(
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector,
+    label: String,
+    sublabel: String,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = if (selected) Color(0xFF059669) else Color.White
+    val contentColor = if (selected) Color.White else Color(0xFF374151)
+    val borderColor = if (selected) Color(0xFF059669) else Color(0xFFD1D5DB)
+    val iconTint = if (selected) Color.White else Color(0xFF059669)
+    val sublabelColor = if (selected) Color(0xFFA7F3D0) else Color(0xFF9CA3AF)
 
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = backgroundColor,
+        modifier = modifier
+            .border(width = 1.5.dp, color = borderColor, shape = RoundedCornerShape(16.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp, horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(imageVector = icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
+            Text(text = sublabel, fontSize = 12.sp, color = sublabelColor)
+        }
+    }
+}
 
 @Composable
 fun PlantDiagnosisScreen(
@@ -276,6 +462,9 @@ fun PlantDiagnosisScreen(
     var responseText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // ─── NEW: Online / Offline toggle state ───
+    var diagnosisMode by remember { mutableStateOf(DiagnosisMode.ONLINE) }
 
     val galleryLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.PickMultipleVisualMedia(3)) { uris ->
         if (uris.isNotEmpty()) {
@@ -294,6 +483,17 @@ fun PlantDiagnosisScreen(
         if (bitmap != null) {
             if (selectedImages.size < 3) { selectedImages.add(bitmap); errorMessage = null }
             else errorMessage = "Maximum 3 images allowed."
+        }
+    }
+
+
+    // Initialize our custom offline AI engine
+    val offlineDetector = remember { DiseaseDetector(context) }
+
+// Clean up the AI model memory when the user navigates away from this screen
+    DisposableEffect(Unit) {
+        onDispose {
+            offlineDetector.close()
         }
     }
 
@@ -328,6 +528,43 @@ fun PlantDiagnosisScreen(
         }
 
         item { Spacer(modifier = Modifier.height(24.dp)) }
+
+        // ─── NEW: ONLINE / OFFLINE SELECTOR ───
+        item {
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Text(
+                    text = "Diagnosis Mode",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1F2937)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ModeOption(
+                        selected = diagnosisMode == DiagnosisMode.ONLINE,
+                        onClick = { diagnosisMode = DiagnosisMode.ONLINE },
+                        icon = Icons.Default.Cloud,
+                        label = "Online",
+                        sublabel = "Cloud AI",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ModeOption(
+                        selected = diagnosisMode == DiagnosisMode.OFFLINE,
+                        onClick = { diagnosisMode = DiagnosisMode.OFFLINE },
+                        icon = Icons.Default.Smartphone,
+                        label = "Offline",
+                        sublabel = "On-Device",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(16.dp)) }
 
         // --- UPLOAD SECTION (FIGMA UI) ---
         item {
@@ -382,7 +619,7 @@ fun PlantDiagnosisScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // --- ORIGINAL API CALL TRIGGERED HERE ---
+                // --- DIAGNOSE BUTTON (NOW BRANCHES BASED ON MODE) ---
                 Button(
                     onClick = {
                         if (selectedImages.isNotEmpty() && !isLoading) {
@@ -391,12 +628,51 @@ fun PlantDiagnosisScreen(
                             responseText = ""
                             scope.launch {
                                 try {
-                                    val base64ImagesList = selectedImages.map { bitmapToBase64(it) }
-                                    val result = callGeminiApi(promptText, base64ImagesList)
-                                    responseText = result
-                                    onAnalysisComplete?.invoke(result)
+                                    if (diagnosisMode == DiagnosisMode.ONLINE) {
+                                        // ─── ORIGINAL ONLINE API CALL ───
+                                        val base64ImagesList = selectedImages.map { bitmapToBase64(it) }
+                                        val result = callGeminiApi(promptText, base64ImagesList)
+                                        responseText = result
+                                        onAnalysisComplete?.invoke(result)
+                                    } else {
+                                        // ─── OFFLINE: PLUG IN YOUR TFLITE / ONNX MODEL HERE ───
+                                        // Example:
+                                        // val interpreter = LocalModelInterpreter(context)
+                                        // val result = interpreter.analyze(selectedImages)
+
+                                        // Placeholder so the UI flow works end-to-end:
+
+
+                                        if (diagnosisMode == DiagnosisMode.ONLINE) {
+                                            // ─── ORIGINAL ONLINE API CALL (Gemini) ───
+                                            val base64ImagesList = selectedImages.map { bitmapToBase64(it) }
+                                            val result = callGeminiApi(promptText, base64ImagesList)
+                                            responseText = result
+                                            onAnalysisComplete?.invoke(result)
+                                        } else {
+                                            // ─── OFFLINE: MOBILE AI INFERENCE ───
+
+                                            // We only need to analyze one image at a time for the CNN
+                                            val imageToAnalyze = selectedImages.first()
+
+                                            // Call the analyzeImage function we wrote earlier
+                                            val rawResult = offlineDetector.analyzeImage(imageToAnalyze)
+
+                                            // Format the output to look professional in the UI
+                                            responseText = "Offline AI Diagnosis Complete.\n\n" +
+                                                    "Detected Pattern:\n$rawResult\n\n" +
+                                                    "Note: This was calculated securely on your device without internet."
+
+                                            onAnalysisComplete?.invoke(responseText)
+                                        }
+//                                        responseText = "Offline diagnosis is active.\n\n(Integrate your on-device TensorFlow Lite or ONNX model here to run inference without internet.)"
+//                                        onAnalysisComplete?.invoke(responseText)
+                                    }
                                 } catch (e: Exception) {
-                                    errorMessage = "Error: ${e.localizedMessage}"
+                                    errorMessage = if (diagnosisMode == DiagnosisMode.ONLINE)
+                                        "Error: ${e.localizedMessage}"
+                                    else
+                                        "Offline Error: ${e.localizedMessage}"
                                 } finally { isLoading = false }
                             }
                         } else if (selectedImages.isEmpty()) { errorMessage = "Please upload at least one image." }
@@ -411,7 +687,12 @@ fun PlantDiagnosisScreen(
                     } else {
                         Icon(Icons.Default.Autorenew, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Diagnose Plant (${selectedImages.size} Images)")
+                        Text(
+                            text = if (diagnosisMode == DiagnosisMode.ONLINE)
+                                "Diagnose Plant Online (${selectedImages.size})"
+                            else
+                                "Diagnose Plant Offline (${selectedImages.size})"
+                        )
                     }
                 }
             }
@@ -444,7 +725,7 @@ fun PlantDiagnosisScreen(
                     }
                 }
             }
-        } else if (responseText.isEmpty() && !isLoading) { // <--- FIXED HERE
+        } else if (responseText.isEmpty() && !isLoading) {
             item { Spacer(modifier = Modifier.height(24.dp)) }
             item {
                 Card(
@@ -465,6 +746,7 @@ fun PlantDiagnosisScreen(
         item { Spacer(modifier = Modifier.height(100.dp)) }
     }
 }
+
 
 // --- HELPER UI COMPOSABLES FOR THE ABOVE SCREENS ---
 
@@ -836,9 +1118,7 @@ private suspend fun callGeminiApi(prompt: String, base64Images: List<String>): S
     if (GEMINI_API_KEY.isEmpty()) throw Exception("API Key is missing.")
 
     // Note: Verify this model version. Standard is usually "gemini-1.5-flash"
-    val modelName = "" +
-            "" +
-            "model = genAI.get_model(\"gemini-3-flash-preview\")"
+    val modelName = "gemini-3-flash-preview"
     val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$GEMINI_API_KEY")
 
     // Construct JSON Payload
